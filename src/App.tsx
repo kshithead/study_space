@@ -14,12 +14,17 @@ import Analytics from "@/pages/Analytics";
 import Settings from "@/pages/Settings";
 import Profile from "@/pages/Profile";
 import CoursePlayer from "@/pages/CoursePlayer";
+import Login from "@/pages/Login";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
   return (
     <AppStateProvider>
       <Routes>
+        {/* Full-screen dedicated authentication route */}
+        <Route path="/login" element={<Login />} />
+
+        {/* Main application shell with navbar & sidebar */}
         <Route element={<AppShell />}>
           <Route path="/" element={<Home />} />
           <Route path="/explore" element={<Explore />} />

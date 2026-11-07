@@ -4,18 +4,9 @@ import json
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 
-# Load .env file automatically
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 
 class HybridAIService:
-    """
-    Multi-tier Hybrid AI Inference Engine:
-    1. Primary: Google Gemini Cloud API (gemini-3.5-flash-lite / gemini-3.8-flash)
-    2. Embeddings: gemini-embedding-001
-    3. Secondary: Local Ollama Model for offline privacy
-    4. Fallback: Context-extractive synthesis
-    """
-
     def __init__(self):
         self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.local_model = os.getenv("OLLAMA_MODEL", "llama3")
@@ -29,7 +20,6 @@ class HybridAIService:
             return False
 
     def get_embeddings(self, texts: List[str]) -> Optional[List[List[float]]]:
-        """Compute embeddings using gemini-embedding-001 (fast cloud vectorization)."""
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             return None
@@ -37,11 +27,10 @@ class HybridAIService:
             from google import genai
             client = genai.Client(api_key=api_key)
             embeddings = []
-            # Batch or iterate
             for t in texts:
                 res = client.models.embed_content(
                     model='gemini-embedding-001',
-                    contents=t[:2000] # clamp chunk length
+                    contents=t[:2000]
                 )
                 embeddings.append(res.embeddings[0].values)
             return embeddings
@@ -53,7 +42,6 @@ class HybridAIService:
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            # Try 3.5-flash-lite first, fallback to 3.8-flash
             for m in ['gemini-3.5-flash-lite', 'gemini-3.8-flash']:
                 try:
                     response = client.models.generate_content(
@@ -87,7 +75,7 @@ class HybridAIService:
             print(f"[Ollama Local Error] {e}")
             return None
 
-    def generate_grounded_answer(
+    def answer_query(
         self,
         query: str,
         context_passages: List[str],
@@ -95,24 +83,35 @@ class HybridAIService:
         mode: str = "auto"
     ) -> Dict[str, Any]:
         """
-        Synthesizes an answer grounded strictly in retrieved document passages.
+        Handles both document-grounded queries AND normal conversation!
         """
-        joined_context = "\n---\n".join(context_passages)
-        prompt = f"""You are the AI Personal Learning Assistant for a college engineering student.
-Answer the student's question using the provided course notes below.
-Be clear, comprehensive, and helpful. Mention relevant definitions and steps if applicable.
-If the notes do not have enough information to answer, state what is mentioned in the notes and politely clarify that further details are not in the uploaded material.
+        has_context = len(context_passages) > 0 and bool(sources)
 
-Context from Student Notes:
+        if has_context:
+            joined_context = "\n---\n".join(context_passages)
+            prompt = f"""You are Socrates, a friendly and encouraging AI Personal Learning Assistant.
+The student asked: "{query}"
+
+Relevant excerpts from their uploaded study notes:
 {joined_context}
 
-Student Question:
-{query}
+Instructions:
+1. Answer their question clearly and engagingly.
+2. Ground your explanation primarily in their notes whenever relevant.
+3. If they are asking general questions or greeting you, respond warmly and naturally as an academic tutor.
+"""
+        else:
+            prompt = f"""You are Socrates, a brilliant, friendly, and supportive AI Personal Learning Assistant.
+The student said/asked: "{query}"
+
+Instructions:
+1. Respond warmly and naturally to conversational remarks or greetings.
+2. If they are asking a general academic, science, or engineering question, answer it clearly with helpful examples or analogies.
+3. Mention that they can upload their course PDFs in the "Study Materials" tab anytime to have you tutor them directly from their own class notes!
 """
 
         gemini_key = os.getenv("GEMINI_API_KEY")
 
-        # 1. Try Gemini Cloud
         if mode in ("auto", "cloud") and gemini_key:
             ans = self._query_gemini(prompt, gemini_key)
             if ans:
@@ -120,11 +119,10 @@ Student Question:
                     "answer": ans,
                     "provider": "Google Gemini Cloud (gemini-3.5-flash-lite)",
                     "mode": "cloud",
-                    "sources": sources,
-                    "grounded": True
+                    "sources": sources if has_context else [],
+                    "grounded": has_context
                 }
 
-        # 2. Try Local Ollama
         if mode in ("auto", "local") and self._is_ollama_alive():
             ans = self._query_ollama(prompt)
             if ans:
@@ -132,21 +130,26 @@ Student Question:
                     "answer": ans,
                     "provider": f"Local AI ({self.local_model} via Ollama)",
                     "mode": "local",
-                    "sources": sources,
-                    "grounded": True
+                    "sources": sources if has_context else [],
+                    "grounded": has_context
                 }
 
-        # 3. Fallback: Extractive Grounding
-        top_src = sources[0] if sources else {}
-        page_ref = f" (Page {top_src.get('page')})" if top_src.get('page') else ""
-        first_pass = context_passages[0] if context_passages else ""
-
-        return {
-            "answer": f"Excerpt from your notes{page_ref}:\n\n{first_pass.strip()}",
-            "provider": "Extractive Fallback",
-            "mode": "fallback",
-            "sources": sources,
-            "grounded": True
-        }
+        # Fallback for offline mode without keys
+        if has_context:
+            return {
+                "answer": f"Here is the relevant excerpt from your notes:\n\n\"{context_passages[0].strip()}\"",
+                "provider": "Extractive Fallback",
+                "mode": "fallback",
+                "sources": sources,
+                "grounded": True
+            }
+        else:
+            return {
+                "answer": "Hello! I am Socrates, your AI Learning Assistant. You can chat with me, ask questions about your studies, or upload course lecture PDFs in the Study Materials section so I can tutor you directly from your class notes!",
+                "provider": "Extractive Fallback",
+                "mode": "fallback",
+                "sources": [],
+                "grounded": False
+            }
 
 ai_service = HybridAIService()

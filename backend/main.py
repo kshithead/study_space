@@ -163,41 +163,40 @@ async def study_chat(req: ChatRequest):
     # Embed query using Gemini
     query_embeddings = ai_service.get_embeddings([req.query])
 
-    if query_embeddings:
-        results = collection.query(
-            query_embeddings=query_embeddings,
-            n_results=3,
-            where=where_filter
-        )
-    else:
-        results = collection.query(
-            query_texts=[req.query],
-            n_results=3,
-            where=where_filter
-        )
+    results = {}
+    try:
+        if query_embeddings:
+            results = collection.query(
+                query_embeddings=query_embeddings,
+                n_results=3,
+                where=where_filter
+            )
+        else:
+            results = collection.query(
+                query_texts=[req.query],
+                n_results=3,
+                where=where_filter
+            )
+    except Exception as e:
+        # If collection is empty, proceed with general conversation
+        results = {}
 
-    documents = results.get("documents", [[]])[0]
-    metadatas = results.get("metadatas", [[]])[0]
+    documents = results.get("documents", [[]])[0] if results.get("documents") else []
+    metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
 
     sources = []
     context_passages = []
     for doc, meta in zip(documents, metadatas):
-        context_passages.append(doc)
-        sources.append({
-            "title": meta.get("title"),
-            "page": meta.get("page"),
-            "filename": meta.get("filename")
-        })
+        if doc and meta:
+            context_passages.append(doc)
+            sources.append({
+                "title": meta.get("title"),
+                "page": meta.get("page"),
+                "filename": meta.get("filename")
+            })
 
-    if not context_passages:
-        return {
-            "answer": "I couldn't find any relevant topics in your uploaded notes matching that question.",
-            "sources": [],
-            "grounded": False,
-            "provider": "None"
-        }
-
-    return ai_service.generate_grounded_answer(
+    # Call AI service with or without context — it handles both!
+    return ai_service.answer_query(
         query=req.query,
         context_passages=context_passages,
         sources=sources,

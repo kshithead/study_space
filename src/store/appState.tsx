@@ -16,14 +16,6 @@ export interface FocusTask {
   done: boolean;
 }
 
-export interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  studentId?: string;
-  avatar?: string;
-}
-
 interface QuizScore {
   best: number;
   attempts: number;
@@ -34,9 +26,6 @@ interface AppStateValue {
   toggleSidebar: () => void;
   mobileNavOpen: boolean;
   setMobileNavOpen: (open: boolean) => void;
-  user: AuthUser | null;
-  login: (userData: AuthUser) => void;
-  logout: () => void;
   bookmarks: string[];
   toggleBookmark: (courseId: string) => void;
   completed: Record<string, string[]>;
@@ -65,14 +54,6 @@ const AppStateContext = createContext<AppStateValue | null>(null);
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = usePersistentState<AuthUser | null>("ss.auth.user", {
-    id: "u-1",
-    name: "Kshitij Rathod",
-    email: "kshitij@vu.edu.in",
-    studentId: "3124045020169",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?crop=entropy&cs=srgb&fm=jpg&q=80&auto=format&fit=crop&w=200&h=200",
-  });
-
   const [sidebarCollapsed, setSidebarCollapsed] = usePersistentState(
     "ss.sidebar.collapsed",
     false,
@@ -118,16 +99,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [notificationsRead, setNotificationsRead] = usePersistentState(
     "ss.notifsRead",
     false,
-  );
-
-  const login = useCallback(
-    (userData: AuthUser) => setUser(userData),
-    [setUser],
-  );
-
-  const logout = useCallback(
-    () => setUser(null),
-    [setUser],
   );
 
   const toggleSidebar = useCallback(
@@ -265,9 +236,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppStateValue>(
     () => ({
-      user,
-      login,
-      logout,
       sidebarCollapsed,
       toggleSidebar,
       mobileNavOpen,
@@ -296,9 +264,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       markNotificationsRead,
     }),
     [
-      user,
-      login,
-      logout,
       sidebarCollapsed,
       toggleSidebar,
       mobileNavOpen,

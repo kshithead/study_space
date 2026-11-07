@@ -10,7 +10,6 @@ import {
   Home,
   Layers,
   ListChecks,
-  LogIn,
   Settings,
   Timer,
   User,
@@ -68,7 +67,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { id: "settings", label: "Settings", to: "/settings", icon: Settings },
       { id: "profile", label: "Profile", to: "/profile", icon: User },
-      { id: "login", label: "Sign In / Register", to: "/login", icon: LogIn },
     ],
   },
 ];

@@ -96,7 +96,7 @@ const kindIcon = {
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const { user, logout, toggleSidebar, setMobileNavOpen, notificationsRead, markNotificationsRead } =
+  const { toggleSidebar, setMobileNavOpen, notificationsRead, markNotificationsRead } =
     useAppState();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
@@ -323,66 +323,58 @@ export default function Navbar() {
             </PopoverContent>
           </Popover>
 
-          {user ? (
-            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-              <DropdownMenuTrigger
-                data-testid="user-profile-menu-trigger"
-                className="rounded-full ring-2 ring-transparent transition-all hover:ring-violet-600/60"
-              >
-                <img
-                  src={user.avatar || mockUser.avatar}
-                  alt={user.name}
-                  className="size-9 rounded-full object-cover"
-                />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                sideOffset={8}
-                className="w-60 border-[#2e2e33] bg-popover"
-              >
-                <DropdownMenuLabel>
-                  <span className="block text-sm font-semibold text-zinc-100">
-                    {user.name}
-                  </span>
-                  <span className="block text-xs font-normal text-muted-foreground">
-                    {user.email}
-                  </span>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-[#27272a]" />
-                <DropdownMenuItem
-                  data-testid="menu-profile"
-                  className="gap-2.5"
-                  onClick={() => go("/profile")}
-                >
-                  <User className="size-4" /> Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2.5" onClick={() => go("/analytics")}>
-                  <BarChart3 className="size-4" /> Learning Analytics
-                </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2.5" onClick={() => go("/settings")}>
-                  <Settings className="size-4" /> Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-[#27272a]" />
-                <DropdownMenuItem
-                  className="gap-2.5 text-red-400 focus:text-red-300"
-                  onClick={() => {
-                    logout();
-                    toast.success("Signed out successfully");
-                    navigate("/login");
-                  }}
-                >
-                  <LogOut className="size-4" /> Sign out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Link
-              to="/login"
-              className="rounded-full bg-gradient-to-r from-violet-600 to-blue-500 px-4 py-1.5 text-xs font-semibold text-white shadow-md transition-all hover:opacity-90 active:scale-95"
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger
+              data-testid="user-profile-menu-trigger"
+              className="rounded-full ring-2 ring-transparent transition-all hover:ring-violet-600/60"
             >
-              Sign In
-            </Link>
-          )}
+              <img
+                src={mockUser.avatar}
+                alt={mockUser.name}
+                className="size-9 rounded-full object-cover"
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              className="w-60 border-[#2e2e33] bg-popover"
+            >
+              <DropdownMenuLabel>
+                <span className="block text-sm font-semibold text-zinc-100">
+                  {mockUser.name}
+                </span>
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {mockUser.handle} · Level {mockUser.level} {mockUser.levelName}
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-[#27272a]" />
+              <DropdownMenuItem
+                data-testid="menu-profile"
+                className="gap-2.5"
+                onClick={() => go("/profile")}
+              >
+                <User className="size-4" /> Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2.5" onClick={() => go("/analytics")}>
+                <BarChart3 className="size-4" /> Learning Analytics
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2.5" onClick={() => go("/settings")}>
+                <Settings className="size-4" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-[#27272a]" />
+              <DropdownMenuItem
+                className="gap-2.5 text-red-400 focus:text-red-300"
+                onClick={() =>
+                  toast.info("Sign out is disabled", {
+                    description:
+                      "Stage 1 is a frontend prototype — authentication arrives later.",
+                  })
+                }
+              >
+                <LogOut className="size-4" /> Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

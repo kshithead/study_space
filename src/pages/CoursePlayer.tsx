@@ -246,117 +246,129 @@ function CourseWorkspace({ course }: { course: Course }) {
             className="relative overflow-hidden rounded-2xl border border-[#27272a] bg-[#08080c]"
           >
             <div className="relative aspect-video">
-              <img
-                src={course.thumbnail}
-                alt=""
-                className={cn(
-                  "size-full object-cover transition-all duration-700",
-                  playing ? "scale-105 brightness-[0.55] saturate-150" : "brightness-[0.45]",
-                )}
-              />
-              {/* ambient glow while playing */}
-              {playing ? (
-                <div className="animate-aura pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(124,58,237,0.35),transparent_65%)]" />
-              ) : null}
-
-              {/* center play/pause */}
-              <button
-                type="button"
-                data-testid="video-play-pause-btn"
-                aria-label={playing ? "Pause" : "Play"}
-                onClick={() => duration > 0 && setPlaying((p) => !p)}
-                className="group absolute inset-0 flex items-center justify-center"
-              >
-                <span className="flex size-20 items-center justify-center rounded-full bg-violet-600/90 text-white shadow-[0_0_60px_rgba(124,58,237,0.65)] transition-all duration-300 group-hover:scale-110 group-active:scale-95">
-                  {playing ? (
-                    <Pause className="size-9 fill-current" />
-                  ) : (
-                    <Play className="ml-1.5 size-9 fill-current" />
-                  )}
-                </span>
-              </button>
-
-              {/* cc overlay */}
-              {cc && playing && duration > 0 ? (
-                <p className="absolute bottom-20 left-1/2 max-w-[80%] -translate-x-1/2 rounded-lg bg-black/75 px-4 py-1.5 text-center text-sm text-zinc-100 backdrop-blur">
-                  {sampleTranscript.find((t) => t.seconds <= elapsed * 1.2)?.text ??
-                    sampleTranscript[0].text}
-                </p>
-              ) : null}
-
-              {/* title chip */}
-              <span className="absolute left-4 top-4 rounded-lg bg-black/60 px-3 py-1.5 text-xs font-medium text-zinc-100 backdrop-blur">
-                {current.title}
-                {current.kind === "reading" ? " · reading" : current.kind === "quiz" ? " · checkpoint quiz" : ""}
-              </span>
-
-              {/* bottom controls */}
-              <div className="absolute inset-x-0 bottom-0 space-y-2 bg-gradient-to-t from-black/85 to-transparent px-4 pb-3 pt-8">
-                <div className="relative">
-                  <input
-                    type="range"
-                    data-testid="video-scrubber"
-                    className="scrubber w-full"
-                    min={0}
-                    max={Math.max(duration, 1)}
-                    step={1}
-                    value={Math.floor(elapsed)}
-                    onChange={(e) => setElapsed(Number(e.target.value))}
-                    disabled={duration === 0}
-                    style={{
-                      background: `linear-gradient(to right, #7c3aed ${scrubPct}%, #2e2e33 ${scrubPct}%)`,
-                    }}
+              {current.youtubeId ? (
+                <iframe
+                  className="size-full aspect-video border-0 rounded-2xl"
+                  src={`https://www.youtube-nocookie.com/embed/${current.youtubeId}?modestbranding=1&rel=0`}
+                  title={current.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              ) : (
+                <>
+                  <img
+                    src={course.thumbnail}
+                    alt=""
+                    className={cn(
+                      "size-full object-cover transition-all duration-700",
+                      playing ? "scale-105 brightness-[0.55] saturate-150" : "brightness-[0.45]",
+                    )}
                   />
-                </div>
-                <div className="flex items-center gap-3 text-xs text-zinc-300">
+                  {/* ambient glow while playing */}
+                  {playing ? (
+                    <div className="animate-aura pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(124,58,237,0.35),transparent_65%)]" />
+                  ) : null}
+
+                  {/* center play/pause */}
                   <button
                     type="button"
-                    onClick={() => setElapsed((e) => Math.max(0, e - 10))}
-                    aria-label="Rewind 10 seconds"
-                    className="transition-colors hover:text-white"
+                    data-testid="video-play-pause-btn"
+                    aria-label={playing ? "Pause" : "Play"}
+                    onClick={() => duration > 0 && setPlaying((p) => !p)}
+                    className="group absolute inset-0 flex items-center justify-center"
                   >
-                    <RotateCcw className="size-4" />
-                  </button>
-                  <span className="font-mono tabular-nums" data-testid="video-time-display">
-                    {fmtSeconds(elapsed)} / {duration > 0 ? current.duration : "—"}
-                  </span>
-                  <div className="ml-auto flex items-center gap-2">
-                    <Gauge className="size-3.5 text-zinc-500" />
-                    <Select value={speed} onValueChange={(v: string) => setSpeed(v)}>
-                      <SelectTrigger data-testid="video-speed-select" size="sm" className="h-7 w-[74px] border-transparent bg-white/10 text-xs text-zinc-100">
-                        <SelectValue>{(v: string | null) => `${v ?? "1"}×`}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="border-[#2e2e33] bg-popover">
-                        {speeds.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {s}×
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <button
-                      type="button"
-                      data-testid="video-resolution-btn"
-                      onClick={() => setResIdx((i) => (i + 1) % resolutions.length)}
-                      className="rounded-md bg-white/10 px-2 py-1 font-medium transition-colors hover:bg-white/20"
-                    >
-                      {resolutions[resIdx]}
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="video-cc-btn"
-                      aria-label="Toggle subtitles"
-                      onClick={() => setCc((c) => !c)}
-                      className={cn(
-                        "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors",
-                        cc ? "bg-violet-600 text-white" : "bg-white/10 text-zinc-300 hover:bg-white/20",
+                    <span className="flex size-20 items-center justify-center rounded-full bg-violet-600/90 text-white shadow-[0_0_60px_rgba(124,58,237,0.65)] transition-all duration-300 group-hover:scale-110 group-active:scale-95">
+                      {playing ? (
+                        <Pause className="size-9 fill-current" />
+                      ) : (
+                        <Play className="ml-1.5 size-9 fill-current" />
                       )}
-                    >
-                      <Subtitles className="size-4" /> CC
-                    </button>
+                    </span>
+                  </button>
+
+                  {/* cc overlay */}
+                  {cc && playing && duration > 0 ? (
+                    <p className="absolute bottom-20 left-1/2 max-w-[80%] -translate-x-1/2 rounded-lg bg-black/75 px-4 py-1.5 text-center text-sm text-zinc-100 backdrop-blur">
+                      {sampleTranscript.find((t) => t.seconds <= elapsed * 1.2)?.text ??
+                        sampleTranscript[0].text}
+                    </p>
+                  ) : null}
+
+                  {/* title chip */}
+                  <span className="absolute left-4 top-4 rounded-lg bg-black/60 px-3 py-1.5 text-xs font-medium text-zinc-100 backdrop-blur">
+                    {current.title}
+                    {current.kind === "reading" ? " · reading" : current.kind === "quiz" ? " · checkpoint quiz" : ""}
+                  </span>
+
+                  {/* bottom controls */}
+                  <div className="absolute inset-x-0 bottom-0 space-y-2 bg-gradient-to-t from-black/85 to-transparent px-4 pb-3 pt-8">
+                    <div className="relative">
+                      <input
+                        type="range"
+                        data-testid="video-scrubber"
+                        className="scrubber w-full"
+                        min={0}
+                        max={Math.max(duration, 1)}
+                        step={1}
+                        value={Math.floor(elapsed)}
+                        onChange={(e) => setElapsed(Number(e.target.value))}
+                        disabled={duration === 0}
+                        style={{
+                          background: `linear-gradient(to right, #7c3aed ${scrubPct}%, #2e2e33 ${scrubPct}%)`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-zinc-300">
+                      <button
+                        type="button"
+                        onClick={() => setElapsed((e) => Math.max(0, e - 10))}
+                        aria-label="Rewind 10 seconds"
+                        className="transition-colors hover:text-white"
+                      >
+                        <RotateCcw className="size-4" />
+                      </button>
+                      <span className="font-mono tabular-nums" data-testid="video-time-display">
+                        {fmtSeconds(elapsed)} / {duration > 0 ? current.duration : "—"}
+                      </span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <Gauge className="size-3.5 text-zinc-500" />
+                        <Select value={speed} onValueChange={(v: string) => setSpeed(v)}>
+                          <SelectTrigger data-testid="video-speed-select" size="sm" className="h-7 w-[74px] border-transparent bg-white/10 text-xs text-zinc-100">
+                            <SelectValue>{(v: string | null) => `${v ?? "1"}×`}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="border-[#2e2e33] bg-popover">
+                            {speeds.map((s) => (
+                              <SelectItem key={s} value={s}>
+                                {s}×
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <button
+                          type="button"
+                          data-testid="video-resolution-btn"
+                          onClick={() => setResIdx((i) => (i + 1) % resolutions.length)}
+                          className="rounded-md bg-white/10 px-2 py-1 font-medium transition-colors hover:bg-white/20"
+                        >
+                          {resolutions[resIdx]}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="video-cc-btn"
+                          aria-label="Toggle subtitles"
+                          onClick={() => setCc((c) => !c)}
+                          className={cn(
+                            "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors",
+                            cc ? "bg-violet-600 text-white" : "bg-white/10 text-zinc-300 hover:bg-white/20",
+                          )}
+                        >
+                          <Subtitles className="size-4" /> CC
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
           </div>
 

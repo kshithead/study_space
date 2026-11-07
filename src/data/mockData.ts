@@ -9,6 +9,7 @@ export interface Lesson {
   title: string;
   duration: string; // "12:34" for video, "8 min" for reading
   kind: "video" | "quiz" | "reading";
+  youtubeId?: string;
 }
 
 export interface CourseModule {
@@ -39,13 +40,14 @@ export interface Course {
 const lessons = (
   courseId: string,
   moduleNo: number,
-  defs: Array<[title: string, duration: string, kind?: Lesson["kind"]]>,
+  defs: Array<[title: string, duration: string, kind?: Lesson["kind"], youtubeId?: string]>,
 ): Lesson[] =>
-  defs.map(([title, duration, kind], i) => ({
+  defs.map(([title, duration, kind, youtubeId], i) => ({
     id: `${courseId}-m${moduleNo}-l${i + 1}`,
     title,
     duration,
     kind: kind ?? "video",
+    youtubeId,
   }));
 
 const u = (photo: string) =>
@@ -53,51 +55,87 @@ const u = (photo: string) =>
 
 export const allCourses: Course[] = [
   {
+    id: "c-python",
+    title: "Complete Python Programming Masterclass",
+    instructor: "Shradha Khapra",
+    instructorTitle: "Ex-Microsoft, Apna College",
+    category: "Programming & Python",
+    level: "Beginner",
+    rating: 4.9,
+    students: "1.2M",
+    totalDuration: "12h 15m",
+    thumbnail: "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?crop=entropy&cs=srgb&fm=jpg&q=80&auto=format&fit=crop&w=800&h=450",
+    description:
+      "A complete from-scratch guide to modern Python. Master variables, control flow, functions, file I/O and object-oriented programming (OOP) through clean code examples and hands-on practice.",
+    tags: ["Python", "Variables", "OOP", "Functions", "Data Structures"],
+    enrolled: true,
+    updated: "2026",
+    modules: [
+      {
+        id: "cp-m1",
+        title: "Python Basics & Core Types",
+        lessons: lessons("c-python", 1, [
+          ["Variables & Data Types", "42:15", "video", "t2_Q2BRzeEE"],
+          ["Strings & Conditional Statements", "38:40", "video", "lIId8IDP6TU"],
+          ["Lists & Tuples in Depth", "45:10", "video", "qVyvmzFxF_o"],
+          ["Dictionaries & Sets", "36:20", "video", "078tYSD7K8E"],
+        ]),
+      },
+      {
+        id: "cp-m2",
+        title: "Control Flow & Modular Code",
+        lessons: lessons("c-python", 2, [
+          ["Loops: While & For Loops", "51:05", "video", "S73thl0AyFU"],
+          ["Functions & Recursion", "48:30", "video", "OvTH-7ESoRA"],
+          ["File Input & Output (I/O)", "39:15", "video", "jU0cndZziO0"],
+        ]),
+      },
+      {
+        id: "cp-m3",
+        title: "Object-Oriented Programming (OOP)",
+        lessons: lessons("c-python", 3, [
+          ["OOPS in Python — Classes & Objects", "54:20", "video", "HeW-D6KpDwY"],
+          ["OOPS in Python — Inheritance & Polymorphism", "58:45", "video", "bAwmZVJeO5s"],
+          ["Checkpoint Quiz: Python Mastery", "15 min", "quiz"],
+        ]),
+      },
+    ],
+  },
+  {
     id: "c1",
     title: "Neural Networks & Deep Learning Foundations",
-    instructor: "Alex Rivera",
-    instructorTitle: "DeepMind Fellow",
+    instructor: "Grant Sanderson (3Blue1Brown)",
+    instructorTitle: "Founder, 3Blue1Brown",
     category: "Artificial Intelligence",
     level: "Intermediate",
     rating: 4.9,
     students: "68.2k",
-    totalDuration: "9h 40m",
+    totalDuration: "4h 20m",
     thumbnail: u("photo-1674027444485-cec3da58eef4"),
     description:
-      "Build a rock-solid mental model of how neural networks actually learn. From the single perceptron to backpropagation, optimizers and modern architectures — each concept is paired with a hands-on lab so theory never floats away.",
-    tags: ["Deep Learning", "Backpropagation", "CNNs", "Optimizers"],
+      "Build a rock-solid mental model of how neural networks actually learn. From the single perceptron to backpropagation, gradient descent and modern network architectures.",
+    tags: ["Deep Learning", "Neural Networks", "Backpropagation", "Math"],
     enrolled: true,
-    updated: "Jan 2026",
+    updated: "2026",
     modules: [
       {
         id: "c1-m1",
         title: "Foundations of Neural Computation",
         lessons: lessons("c1", 1, [
-          ["The Neuron & the Perceptron", "12:34"],
-          ["Activation Functions, Deep Dive", "18:02"],
-          ["Gradient Descent Intuition", "15:47"],
-          ["Lab: Build a Perceptron from Scratch", "22:10"],
+          ["What is a Neural Network?", "19:13", "video", "aircAruvnKk"],
+          ["Gradient Descent & How Networks Learn", "21:01", "video", "IHZwWFHWa-w"],
+          ["What is Backpropagation Really Doing?", "13:54", "video", "Ilg3gGewQ5U"],
+          ["Backpropagation Calculus", "10:17", "video", "tIeHLnjs5U8"],
         ]),
       },
       {
         id: "c1-m2",
         title: "Backpropagation & Training",
         lessons: lessons("c1", 2, [
-          ["Computational Graphs", "14:21"],
-          ["Backpropagation Step by Step", "21:33"],
-          ["Loss Functions Compared", "12:08"],
+          ["Computational Graphs", "14:21", "video", "aircAruvnKk"],
+          ["Backpropagation Step by Step", "21:33", "video", "Ilg3gGewQ5U"],
+          ["Loss Functions Compared", "12:08", "video", "IHZwWFHWa-w"],
           ["Checkpoint Quiz: Training Dynamics", "10 min", "quiz"],
-          ["Optimizers: From SGD to Adam", "19:45"],
-        ]),
-      },
-      {
-        id: "c1-m3",
-        title: "Modern Architectures",
-        lessons: lessons("c1", 3, [
-          ["CNNs & Feature Maps", "24:12"],
-          ["RNNs and the Road to Attention", "20:31"],
-          ["Transfer Learning Playbook", "16:59"],
-          ["Final Project Brief", "8 min", "reading"],
         ]),
       },
     ],

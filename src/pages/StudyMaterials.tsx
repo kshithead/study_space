@@ -104,6 +104,7 @@ export default function StudyMaterials() {
   const realMaterials: Material[] = uploadedDocs.map((doc) => ({
     id: doc.doc_id,
     course: doc.course || "General",
+    courseId: doc.doc_id,
     title: doc.title || doc.filename,
     type: "notes",
     readTime: `${doc.chunks || 1} chunks`,

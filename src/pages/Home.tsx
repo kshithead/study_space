@@ -44,7 +44,8 @@ function greeting() {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { completed, courseProgress } = useAppState();
+  const { completed, courseProgress, user: currentUser } = useAppState();
+  const user = currentUser ?? mockUser;
 
   const inProgress = allCourses
     .filter((c) => c.enrolled && courseProgress(c.id) < 100)
@@ -62,7 +63,7 @@ export default function Home() {
   };
 
   const goalPct = Math.round(
-    Math.min(100, (mockUser.hoursThisWeek / mockUser.weeklyGoalHours) * 100),
+    Math.min(100, (user.hoursThisWeek / user.weeklyGoalHours) * 100),
   );
 
   return (
@@ -77,17 +78,17 @@ export default function Home() {
           })}
         </p>
         <h1 className="mt-1 text-2xl font-bold sm:text-3xl" data-testid="home-greeting">
-          {greeting()}, {mockUser.firstName} — ready to level up?
+          {greeting()}, {user.firstName} — ready to level up?
         </h1>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-orange-300">
-            <Flame className="size-3.5" /> {mockUser.streak}-day streak
+            <Flame className="size-3.5" /> {user.streak}-day streak
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-violet-300">
-            <Zap className="size-3.5" /> {mockUser.hoursThisWeek}h / {mockUser.weeklyGoalHours}h this week
+            <Zap className="size-3.5" /> {user.hoursThisWeek}h / {user.weeklyGoalHours}h this week
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-blue-300">
-            Level {mockUser.level} · {mockUser.levelName}
+            Level {user.level} · {user.levelName}
           </span>
         </div>
       </section>

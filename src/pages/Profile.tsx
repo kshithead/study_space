@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
-import { Award, Flame, GraduationCap, Mail, Settings, Sparkles, Zap } from "lucide-react";
+import { Award, Flame, GraduationCap, LogIn, Mail, Settings, Sparkles, Zap } from "lucide-react";
 import { allCourses, badges, user as mockUser } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
 import { PageHeader, ProgressBar } from "@/components/shared";
 import { cn } from "@/lib/utils";
 
 export default function Profile() {
-  const { courseProgress, completed, quizScores } = useAppState();
+  const { courseProgress, completed, quizScores, user: currentUser } = useAppState();
+  const user = currentUser ?? mockUser;
   const enrolled = allCourses.filter((c) => c.enrolled);
   const lessonsDone = Object.values(completed).reduce((n, l) => n + l.length, 0);
   const scores = Object.values(quizScores);
@@ -14,13 +15,13 @@ export default function Profile() {
     scores.length > 0
       ? Math.round(scores.reduce((n, s) => n + s.best, 0) / scores.length)
       : 82;
-  const xpPct = Math.round((mockUser.xp / mockUser.xpToNext) * 100);
+  const xpPct = Math.round((user.xp / user.xpToNext) * 100);
   const earned = badges.filter((b) => b.earned);
 
   const stats = [
     { id: "courses", label: "Courses enrolled", value: String(enrolled.length), icon: GraduationCap, tint: "text-violet-400" },
     { id: "lessons", label: "Lessons completed", value: String(lessonsDone), icon: Sparkles, tint: "text-blue-400" },
-    { id: "streak", label: "Day streak", value: String(mockUser.streak), icon: Flame, tint: "text-orange-400" },
+    { id: "streak", label: "Day streak", value: String(user.streak), icon: Flame, tint: "text-orange-400" },
     { id: "accuracy", label: "Quiz accuracy", value: `${avgAccuracy}%`, icon: Zap, tint: "text-emerald-400" },
   ];
 
@@ -38,47 +39,56 @@ export default function Profile() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-end gap-4">
               <img
-                src={mockUser.avatar}
-                alt={mockUser.name}
+                src={user.avatar}
+                alt={user.name}
                 className="-mt-10 size-24 rounded-2xl border-4 border-card object-cover shadow-xl"
                 data-testid="profile-avatar"
               />
               <div className="pb-1">
                 <h2 className="font-heading text-xl font-bold" data-testid="profile-name">
-                  {mockUser.name}
+                  {user.name}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  {mockUser.handle} · Level {mockUser.level} {mockUser.levelName}
+                  {user.handle} · Level {user.level} {user.levelName}
                 </p>
               </div>
             </div>
-            <Link
-              to="/settings"
-              data-testid="profile-settings-link"
-              className="inline-flex w-fit items-center gap-2 rounded-full border border-[#2e2e33] bg-[#1b1b1e] px-4 py-2 text-sm font-medium text-zinc-200 transition-all hover:border-violet-600/50 hover:text-white active:scale-95"
-            >
-              <Settings className="size-4" /> Edit preferences
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/login"
+                data-testid="profile-login-link"
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-violet-500/40 bg-violet-600/15 px-4 py-2 text-sm font-medium text-violet-300 transition-all hover:bg-violet-600/25 hover:text-white active:scale-95"
+              >
+                <LogIn className="size-4" /> Switch Profile
+              </Link>
+              <Link
+                to="/settings"
+                data-testid="profile-settings-link"
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-[#2e2e33] bg-[#1b1b1e] px-4 py-2 text-sm font-medium text-zinc-200 transition-all hover:border-violet-600/50 hover:text-white active:scale-95"
+              >
+                <Settings className="size-4" /> Edit preferences
+              </Link>
+            </div>
           </div>
 
           {/* XP bar */}
           <div className="mt-5 flex items-center gap-3">
             <ProgressBar value={xpPct} glow />
             <span className="shrink-0 text-xs text-muted-foreground">
-              {mockUser.xp.toLocaleString()} / {mockUser.xpToNext.toLocaleString()} XP to level{" "}
-              {mockUser.level + 1}
+              {user.xp.toLocaleString()} / {user.xpToNext.toLocaleString()} XP to level{" "}
+              {user.level + 1}
             </span>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <Mail className="size-3.5" /> {mockUser.email}
+              <Mail className="size-3.5" /> {user.email}
             </span>
-            <span>Member since {mockUser.joined}</span>
+            <span>Member since {user.joined}</span>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {mockUser.interests.map((i) => (
+            {user.interests.map((i) => (
               <span
                 key={i}
                 className="rounded-full bg-[#232326] px-3 py-1 text-xs font-medium text-zinc-300"

@@ -126,7 +126,8 @@ function RichContent({ content }: { content: string }) {
 const streamInterval = 24;
 
 export default function AiTutor() {
-  const { chatSessions, upsertChatSession, deleteChatSession } = useAppState();
+  const { chatSessions, upsertChatSession, deleteChatSession, user: currentUser } = useAppState();
+  const user = currentUser ?? mockUser;
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<TutorMode>("Socratic Mentor");
   const [model, setModel] = useState("tutor");
@@ -355,7 +356,7 @@ export default function AiTutor() {
                 <Bot className="size-7 text-white" />
               </span>
               <h1 className="font-heading text-xl font-bold sm:text-2xl">
-                What shall we learn today, {mockUser.firstName}?
+                What shall we learn today, {user.firstName}?
               </h1>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
                 Ask anything, attach your notes, or start from one of the suggestions.

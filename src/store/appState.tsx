@@ -5,10 +5,13 @@ import {
   completedSeed,
   quizScoreSeed,
   seedChatSessions,
+  user as defaultUser,
 } from "@/data/mockData";
 import type { ChatSession } from "@/data/mockData";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { getCourse, courseLessons } from "@/data/mockData";
+
+export type UserProfile = typeof defaultUser;
 
 export interface FocusTask {
   id: string;
@@ -47,6 +50,10 @@ interface AppStateValue {
   removeFocusTask: (id: string) => void;
   notificationsRead: boolean;
   markNotificationsRead: () => void;
+  user: UserProfile;
+  login: (profile: Partial<UserProfile>) => void;
+  logout: () => void;
+  updateUser: (updates: Partial<UserProfile>) => void;
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
@@ -99,6 +106,40 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [notificationsRead, setNotificationsRead] = usePersistentState(
     "ss.notifsRead",
     false,
+  );
+  const [user, setUser] = usePersistentState<UserProfile>("ss.user", defaultUser);
+
+  const login = useCallback(
+    (profile: Partial<UserProfile>) => {
+      setUser((prev) => ({
+        ...prev,
+        ...profile,
+      }));
+    },
+    [setUser],
+  );
+
+  const logout = useCallback(() => {
+    setUser({
+      ...defaultUser,
+      name: "Guest Student",
+      firstName: "Guest",
+      handle: "@guest.learner",
+      email: "guest@studyspace.app",
+      streak: 1,
+      level: 1,
+      levelName: "Novice",
+      xp: 150,
+      xpToNext: 1000,
+      hoursThisWeek: 0.5,
+    });
+  }, [setUser]);
+
+  const updateUser = useCallback(
+    (updates: Partial<UserProfile>) => {
+      setUser((prev) => ({ ...prev, ...updates }));
+    },
+    [setUser],
   );
 
   const toggleSidebar = useCallback(
@@ -262,6 +303,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       removeFocusTask,
       notificationsRead,
       markNotificationsRead,
+      user,
+      login,
+      logout,
+      updateUser,
     }),
     [
       sidebarCollapsed,
@@ -288,6 +333,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       removeFocusTask,
       notificationsRead,
       markNotificationsRead,
+      user,
+      login,
+      logout,
+      updateUser,
     ],
   );
 

@@ -1,6 +1,8 @@
 import { Bell, Bot, Moon, Palette, Save, Target, UserRound } from "lucide-react";
 import { tutorModes, user as mockUser } from "@/data/mockData";
 import { usePersistentState } from "@/hooks/usePersistentState";
+import { useAppState } from "@/store/appState";
+import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import {
   Select,
@@ -50,6 +52,10 @@ function ToggleRow({ label, desc, checked, onChange, testId }: ToggleRowProps) {
 }
 
 export default function Settings() {
+  const { user: currentUser, updateUser } = useAppState();
+  const user = currentUser ?? mockUser;
+  const [userName, setUserName] = useState(user.name);
+  const [userEmail, setUserEmail] = useState(user.email);
   const [dailyGoal, setDailyGoal] = usePersistentState("ss.settings.dailyGoal", "1.5");
   const [defaultMode, setDefaultMode] = usePersistentState("ss.settings.aiMode", "Socratic Mentor");
   const [notifCourse, setNotifCourse] = usePersistentState("ss.settings.notifCourse", true);
@@ -58,16 +64,22 @@ export default function Settings() {
   const [autoplay, setAutoplay] = usePersistentState("ss.settings.autoplay", true);
   const [reduceMotion, setReduceMotion] = usePersistentState("ss.settings.reduceMotion", false);
 
-  const saveAll = () =>
-    toast.success("Settings saved", {
-      description: "Stored locally — this stage has no backend to sync to.",
+  const saveAll = () => {
+    updateUser({
+      name: userName,
+      firstName: userName.split(" ")[0],
+      email: userEmail,
     });
+    toast.success("Settings & Profile saved", {
+      description: "Your updated profile preferences have been saved.",
+    });
+  };
 
   return (
     <div className="max-w-3xl space-y-5">
       <PageHeader
         title="Settings"
-        subtitle="Preferences persist in this browser — authentication and sync arrive in a later stage"
+        subtitle="Manage your learning preferences, profile information and notification controls."
       />
 
       {/* profile */}
@@ -77,15 +89,16 @@ export default function Settings() {
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
           <img
-            src={mockUser.avatar}
-            alt={mockUser.name}
+            src={user.avatar}
+            alt={user.name}
             className="size-20 rounded-2xl object-cover"
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-zinc-400">Full name</span>
               <input
-                defaultValue={mockUser.name}
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
                 data-testid="settings-name-input"
                 className="h-10 w-full rounded-xl border border-[#2e2e33] bg-[#181818] px-3.5 text-sm text-zinc-100 outline-none transition-colors focus:border-violet-600"
               />
@@ -93,7 +106,8 @@ export default function Settings() {
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-zinc-400">Email</span>
               <input
-                defaultValue={mockUser.email}
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
                 data-testid="settings-email-input"
                 className="h-10 w-full rounded-xl border border-[#2e2e33] bg-[#181818] px-3.5 text-sm text-zinc-100 outline-none transition-colors focus:border-violet-600"
               />

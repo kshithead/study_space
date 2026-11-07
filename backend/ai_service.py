@@ -2,13 +2,18 @@ import os
 import urllib.request
 import json
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+
+# Load .env file automatically
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 
 class HybridAIService:
     """
     Multi-tier Hybrid AI Inference Engine:
-    1. Primary: Google Gemini Cloud API (Fast, comprehensive, free tier)
-    2. Secondary: Local Ollama Model (e.g. llama3 / qwen2.5 / mistral) for offline privacy
-    3. Fallback: Context-extractive synthesis (Zero API key / offline baseline)
+    1. Primary: Google Gemini Cloud API (gemini-3.5-flash-lite / gemini-3.8-flash)
+    2. Embeddings: gemini-embedding-001
+    3. Secondary: Local Ollama Model for offline privacy
+    4. Fallback: Context-extractive synthesis
     """
 
     def __init__(self):
@@ -23,15 +28,42 @@ class HybridAIService:
         except Exception:
             return False
 
+    def get_embeddings(self, texts: List[str]) -> Optional[List[List[float]]]:
+        """Compute embeddings using gemini-embedding-001 (fast cloud vectorization)."""
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return None
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            embeddings = []
+            # Batch or iterate
+            for t in texts:
+                res = client.models.embed_content(
+                    model='gemini-embedding-001',
+                    contents=t[:2000] # clamp chunk length
+                )
+                embeddings.append(res.embeddings[0].values)
+            return embeddings
+        except Exception as e:
+            print(f"[Gemini Embeddings Error] {e}")
+            return None
+
     def _query_gemini(self, prompt: str, api_key: str) -> Optional[str]:
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt
-            )
-            return response.text
+            # Try 3.5-flash-lite first, fallback to 3.8-flash
+            for m in ['gemini-3.5-flash-lite', 'gemini-3.8-flash']:
+                try:
+                    response = client.models.generate_content(
+                        model=m,
+                        contents=prompt
+                    )
+                    return response.text
+                except Exception as model_err:
+                    print(f"Model {m} error: {model_err}")
+            return None
         except Exception as e:
             print(f"[Gemini Cloud Error] {e}")
             return None
@@ -64,13 +96,12 @@ class HybridAIService:
     ) -> Dict[str, Any]:
         """
         Synthesizes an answer grounded strictly in retrieved document passages.
-        mode: "auto" | "cloud" | "local"
         """
         joined_context = "\n---\n".join(context_passages)
-        prompt = f"""You are the AI Personal Learning Assistant for a student.
-Answer the student's question using ONLY the provided course notes below.
-If the notes do not have enough information to answer, politely explain that the concept isn't covered in their uploaded notes.
-Be clear, academic, and cite key principles.
+        prompt = f"""You are the AI Personal Learning Assistant for a college engineering student.
+Answer the student's question using the provided course notes below.
+Be clear, comprehensive, and helpful. Mention relevant definitions and steps if applicable.
+If the notes do not have enough information to answer, state what is mentioned in the notes and politely clarify that further details are not in the uploaded material.
 
 Context from Student Notes:
 {joined_context}
@@ -81,19 +112,19 @@ Student Question:
 
         gemini_key = os.getenv("GEMINI_API_KEY")
 
-        # 1. Try Gemini Cloud if allowed and configured
+        # 1. Try Gemini Cloud
         if mode in ("auto", "cloud") and gemini_key:
             ans = self._query_gemini(prompt, gemini_key)
             if ans:
                 return {
                     "answer": ans,
-                    "provider": "Cloud (Google Gemini 2.5 Flash)",
+                    "provider": "Google Gemini Cloud (gemini-3.5-flash-lite)",
                     "mode": "cloud",
                     "sources": sources,
                     "grounded": True
                 }
 
-        # 2. Try Local Ollama if available
+        # 2. Try Local Ollama
         if mode in ("auto", "local") and self._is_ollama_alive():
             ans = self._query_ollama(prompt)
             if ans:
@@ -111,12 +142,11 @@ Student Question:
         first_pass = context_passages[0] if context_passages else ""
 
         return {
-            "answer": f"Here is the relevant excerpt from your notes{page_ref}:\n\n\"{first_pass.strip()}\"\n\n(Tip: Add a free GEMINI_API_KEY or launch Ollama locally to enable full conversational explanations!)",
-            "provider": "Local Extractive Fallback",
+            "answer": f"Excerpt from your notes{page_ref}:\n\n{first_pass.strip()}",
+            "provider": "Extractive Fallback",
             "mode": "fallback",
             "sources": sources,
             "grounded": True
         }
 
 ai_service = HybridAIService()
-

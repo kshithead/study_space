@@ -6,12 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pypdf import PdfReader
 import chromadb
+from dotenv import load_dotenv
 
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
 from backend.ai_service import ai_service
 
 app = FastAPI(title="StudySpace AI Assistant API", version="1.0.0")
 
-# Enable CORS for React frontend (Vite port 5173)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,14 +26,17 @@ DB_DIR = os.path.join(os.path.dirname(__file__), "chroma_db")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DB_DIR, exist_ok=True)
 
-# Initialize persistent ChromaDB
+# Use Chroma client without default ONNX embedding function to prevent slow 80MB downloads
 chroma_client = chromadb.PersistentClient(path=DB_DIR)
-collection = chroma_client.get_or_create_collection(name="course_materials")
+collection = chroma_client.get_or_create_collection(
+    name="course_materials_v2",
+    metadata={"hnsw:space": "cosine"}
+)
 
 class ChatRequest(BaseModel):
     query: str
     doc_id: Optional[str] = None
-    mode: Optional[str] = "auto" # "auto" | "cloud" | "local"
+    mode: Optional[str] = "auto"
 
 @app.get("/")
 def read_root():
@@ -40,14 +44,14 @@ def read_root():
 
 @app.get("/api/ai/status")
 def get_ai_status():
-    """Returns available AI providers and their current status."""
     has_gemini = bool(os.getenv("GEMINI_API_KEY"))
     ollama_ready = ai_service._is_ollama_alive()
     return {
         "gemini_cloud": {
             "available": has_gemini,
             "configured": has_gemini,
-            "name": "Google Gemini 2.5 Flash (Cloud)"
+            "model": "gemini-3.5-flash-lite",
+            "name": "Google Gemini (gemini-3.5-flash-lite)"
         },
         "ollama_local": {
             "available": ollama_ready,
@@ -63,9 +67,6 @@ async def upload_document(
     title: Optional[str] = Form(None),
     course: Optional[str] = Form("General Studies")
 ):
-    """
-    Receives PDF, extracts text, chunks into passages, and stores vectors into ChromaDB.
-    """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are currently supported")
 
@@ -92,7 +93,7 @@ async def upload_document(
             for w in words:
                 current_chunk.append(w)
                 current_len += len(w) + 1
-                if current_len >= 500:
+                if current_len >= 600:
                     chunk_text = " ".join(current_chunk)
                     chunk_id = f"{doc_id}_p{page_idx+1}_c{chunk_counter}"
                     chunks.append(chunk_text)
@@ -123,13 +124,25 @@ async def upload_document(
                 chunk_counter += 1
 
         if not chunks:
-            raise HTTPException(status_code=400, detail="No readable text found. Scanned image PDFs require OCR.")
+            raise HTTPException(status_code=400, detail="No readable text found in document.")
 
-        collection.add(
-            documents=chunks,
-            metadatas=metadatas,
-            ids=ids
-        )
+        # Compute embeddings via Gemini
+        embeddings = ai_service.get_embeddings(chunks)
+
+        if embeddings:
+            collection.add(
+                documents=chunks,
+                embeddings=embeddings,
+                metadatas=metadatas,
+                ids=ids
+            )
+        else:
+            # Fallback: store documents directly
+            collection.add(
+                documents=chunks,
+                metadatas=metadatas,
+                ids=ids
+            )
 
         return {
             "status": "success",
@@ -145,17 +158,23 @@ async def upload_document(
 
 @app.post("/api/study/chat")
 async def study_chat(req: ChatRequest):
-    """
-    RAG-grounded retrieval: finds the most relevant passages from uploaded notes,
-    then synthesizes an answer using the Hybrid AI Engine.
-    """
     where_filter = {"doc_id": req.doc_id} if req.doc_id else None
 
-    results = collection.query(
-        query_texts=[req.query],
-        n_results=3,
-        where=where_filter
-    )
+    # Embed query using Gemini
+    query_embeddings = ai_service.get_embeddings([req.query])
+
+    if query_embeddings:
+        results = collection.query(
+            query_embeddings=query_embeddings,
+            n_results=3,
+            where=where_filter
+        )
+    else:
+        results = collection.query(
+            query_texts=[req.query],
+            n_results=3,
+            where=where_filter
+        )
 
     documents = results.get("documents", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]
@@ -178,19 +197,15 @@ async def study_chat(req: ChatRequest):
             "provider": "None"
         }
 
-    # Pass to the Hybrid AI Service (Gemini Cloud -> Ollama Local -> Extractive)
-    response_data = ai_service.generate_grounded_answer(
+    return ai_service.generate_grounded_answer(
         query=req.query,
         context_passages=context_passages,
         sources=sources,
         mode=req.mode or "auto"
     )
 
-    return response_data
-
 @app.get("/api/documents")
 def list_documents():
-    """Lists all indexed study documents with chunk statistics."""
     all_data = collection.get()
     unique_docs = {}
     for meta in all_data.get("metadatas", []):

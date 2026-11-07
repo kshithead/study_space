@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from pypdf import PdfReader
 import chromadb
 
+from backend.ai_service import ai_service
+
 app = FastAPI(title="StudySpace AI Assistant API", version="1.0.0")
 
 # Enable CORS for React frontend (Vite port 5173)
@@ -30,16 +32,30 @@ collection = chroma_client.get_or_create_collection(name="course_materials")
 class ChatRequest(BaseModel):
     query: str
     doc_id: Optional[str] = None
-    topic: Optional[str] = None
-
-class QuizGenerateRequest(BaseModel):
-    doc_id: Optional[str] = None
-    topic: str
-    num_questions: int = 5
+    mode: Optional[str] = "auto" # "auto" | "cloud" | "local"
 
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "StudySpace AI Backend Engine Running"}
+
+@app.get("/api/ai/status")
+def get_ai_status():
+    """Returns available AI providers and their current status."""
+    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+    ollama_ready = ai_service._is_ollama_alive()
+    return {
+        "gemini_cloud": {
+            "available": has_gemini,
+            "configured": has_gemini,
+            "name": "Google Gemini 2.5 Flash (Cloud)"
+        },
+        "ollama_local": {
+            "available": ollama_ready,
+            "model": ai_service.local_model,
+            "name": f"Local Ollama ({ai_service.local_model})"
+        },
+        "active_mode": "gemini" if has_gemini else ("ollama" if ollama_ready else "extractive_fallback")
+    }
 
 @app.post("/api/documents/upload")
 async def upload_document(
@@ -59,7 +75,6 @@ async def upload_document(
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # Extract text by page
     try:
         reader = PdfReader(file_path)
         chunks = []
@@ -71,7 +86,6 @@ async def upload_document(
             text = page.extract_text()
             if not text:
                 continue
-            # Simple clean chunking: split into ~500-char segments
             words = text.split()
             current_chunk = []
             current_len = 0
@@ -109,9 +123,8 @@ async def upload_document(
                 chunk_counter += 1
 
         if not chunks:
-            raise HTTPException(status_code=400, detail="No readable text extracted from document. Is it a scanned image?")
+            raise HTTPException(status_code=400, detail="No readable text found. Scanned image PDFs require OCR.")
 
-        # Add to Vector Store (Chroma automatically uses its default embedding model)
         collection.add(
             documents=chunks,
             metadatas=metadatas,
@@ -133,11 +146,10 @@ async def upload_document(
 @app.post("/api/study/chat")
 async def study_chat(req: ChatRequest):
     """
-    RAG-grounded retrieval: finds the most relevant passages from uploaded notes.
+    RAG-grounded retrieval: finds the most relevant passages from uploaded notes,
+    then synthesizes an answer using the Hybrid AI Engine.
     """
-    where_filter = None
-    if req.doc_id:
-        where_filter = {"doc_id": req.doc_id}
+    where_filter = {"doc_id": req.doc_id} if req.doc_id else None
 
     results = collection.query(
         query_texts=[req.query],
@@ -158,55 +170,27 @@ async def study_chat(req: ChatRequest):
             "filename": meta.get("filename")
         })
 
-    # Prepare grounding answer response
     if not context_passages:
         return {
-            "answer": "I could not find relevant content for your query in the uploaded documents.",
+            "answer": "I couldn't find any relevant topics in your uploaded notes matching that question.",
             "sources": [],
-            "grounded": False
+            "grounded": False,
+            "provider": "None"
         }
 
-    joined_context = "\n---\n".join(context_passages)
+    # Pass to the Hybrid AI Service (Gemini Cloud -> Ollama Local -> Extractive)
+    response_data = ai_service.generate_grounded_answer(
+        query=req.query,
+        context_passages=context_passages,
+        sources=sources,
+        mode=req.mode or "auto"
+    )
 
-    # Check for Gemini API Key in environment or fallback to smart extractive answer
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key:
-        try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            prompt = f"""You are an AI Personal Study Assistant for a college engineering student.
-Answer the student's question based strictly on the provided course document context below.
-If the context does not contain the answer, say "This topic is not covered in the uploaded material."
-
-Context:
-{joined_context}
-
-Student Question:
-{req.query}
-"""
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt
-            )
-            return {
-                "answer": response.text,
-                "sources": sources,
-                "grounded": True
-            }
-        except Exception as e:
-            pass
-
-    # Clean local fallback if API key is not configured yet
-    return {
-        "answer": f"Based on your notes (Page {sources[0]['page']}):\n\n{context_passages[0][:300]}...",
-        "sources": sources,
-        "grounded": True,
-        "note": "Add GEMINI_API_KEY to environment for full generative synthesis."
-    }
+    return response_data
 
 @app.get("/api/documents")
 def list_documents():
-    """Lists indexed documents from vector store."""
+    """Lists all indexed study documents with chunk statistics."""
     all_data = collection.get()
     unique_docs = {}
     for meta in all_data.get("metadatas", []):
@@ -218,6 +202,10 @@ def list_documents():
                 "doc_id": did,
                 "title": meta.get("title"),
                 "filename": meta.get("filename"),
-                "course": meta.get("course")
+                "course": meta.get("course"),
+                "chunks": 0
             }
+        if did in unique_docs:
+            unique_docs[did]["chunks"] += 1
+
     return list(unique_docs.values())

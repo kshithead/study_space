@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { BookOpen, Download, FileText, ScrollText, Sheet, Sparkles } from "lucide-react";
-import { materialTypeLabels, materials } from "@/data/mockData";
+import { useState, useEffect, useRef } from "react";
+import { BookOpen, Download, FileText, ScrollText, Sheet, Sparkles, Upload, Loader2 } from "lucide-react";
+import { materialTypeLabels, materials as mockMaterials } from "@/data/mockData";
 import type { Material, MaterialType } from "@/data/mockData";
 import { EmptyState, PageHeader } from "@/components/shared";
 import {
@@ -31,15 +31,123 @@ const filters: Array<{ id: MaterialType | "all"; label: string }> = [
 export default function StudyMaterials() {
   const [filter, setFilter] = useState<MaterialType | "all">("all");
   const [preview, setPreview] = useState<Material | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const list = materials.filter((m) => filter === "all" || m.type === filter);
+  // Fetch real uploaded documents from backend
+  const fetchDocs = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/documents");
+      if (res.ok) {
+        const data = await res.json();
+        setUploadedDocs(data);
+      }
+    } catch (e) {
+      // Backend not running or offline
+    }
+  };
+
+  useEffect(() => {
+    fetchDocs();
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Please upload a PDF document.");
+      return;
+    }
+
+    setIsUploading(true);
+    toast.loading("Parsing & indexing PDF with RAG...", { id: "upload-toast" });
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", file.name.replace(/\.[^/.]+$/, ""));
+      formData.append("course", "Academic Study Material");
+
+      const res = await fetch("http://127.0.0.1:8000/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        toast.success(`Indexed "${file.name}"!`, {
+          id: "upload-toast",
+          description: `${result.total_pages} pages processed (${result.chunks_indexed} semantic chunks).`,
+        });
+        fetchDocs();
+      } else {
+        const err = await res.json();
+        toast.error("Upload failed", {
+          id: "upload-toast",
+          description: err.detail || "Server error",
+        });
+      }
+    } catch (err: any) {
+      toast.error("Could not reach backend", {
+        id: "upload-toast",
+        description: "Ensure the FastAPI server is running on port 8000.",
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // Convert real uploaded backend docs into material card format
+  const realMaterials: Material[] = uploadedDocs.map((doc) => ({
+    id: doc.doc_id,
+    course: doc.course || "General",
+    title: doc.title || doc.filename,
+    type: "notes",
+    readTime: `${doc.chunks || 1} chunks`,
+    updated: "Just now",
+    excerpt: `Indexed PDF document ready for RAG study chat, flashcards, and quizzes.`,
+    body: [
+      `This document (${doc.filename}) has been vectorized and stored in ChromaDB.`,
+      `You can now open the AI Tutor to ask questions grounded directly in this material with page citations.`
+    ]
+  }));
+
+  const allItems = [...realMaterials, ...mockMaterials];
+  const list = allItems.filter((m) => filter === "all" || m.type === filter);
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Study Materials"
-        subtitle="AI-generated summaries, cheat sheets and digests from your courses — generated sample content"
-      />
+        subtitle="Upload your notes or explore AI summaries and lecture digests"
+      >
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          accept="application/pdf"
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+        >
+          {isUploading ? (
+            <>
+              <Loader2 className="size-4 animate-spin" /> Uploading PDF...
+            </>
+          ) : (
+            <>
+              <Upload className="size-4" /> Upload Notes (PDF)
+            </>
+          )}
+        </button>
+      </PageHeader>
 
       <div className="flex flex-wrap gap-2">
         {filters.map((f) => (

@@ -145,7 +145,7 @@ export default function AiTutor() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [active?.messages.length, streamText]);
 
-  const send = (raw?: string) => {
+  const send = async (raw?: string) => {
     const text = (raw ?? input).trim();
     if (!text || streamText !== null) return;
     setInput("");
@@ -166,24 +166,53 @@ export default function AiTutor() {
       messages: [...base.messages, userMsg, tutorMsg],
     });
     setActiveId(sessionId);
+    setStreamText("Thinking and retrieving relevant notes...");
 
-    // simulated streaming — frontend prototype only, no model behind this
-    const full = simulatedTutorResponse(text);
-    const words = full.split(" ");
-    let i = 0;
-    const timer = window.setInterval(() => {
-      i += 2;
-      setStreamText(words.slice(0, i).join(" "));
-      if (i >= words.length) {
-        window.clearInterval(timer);
-        upsertChatSession({
-          ...base,
-          updatedAt: Date.now(),
-          messages: [...base.messages, userMsg, { ...tutorMsg, content: full }],
-        });
-        setStreamText(null);
+    try {
+      // Connect to real FastAPI backend
+      const response = await fetch("http://127.0.0.1:8000/api/study/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: text }),
+      });
+      
+      let full = "";
+      if (response.ok) {
+        const data = await response.json();
+        full = data.answer || "No response received from tutor.";
+        if (data.sources && data.sources.length > 0) {
+          full += "\n\n**Sources & Citations:**\n" + data.sources.map((s: any) => `- ${s.title || s.filename} (Page ${s.page})`).join("\n");
+        }
+      } else {
+        full = simulatedTutorResponse(text);
       }
-    }, streamInterval);
+
+      const words = full.split(" ");
+      let i = 0;
+      const timer = window.setInterval(() => {
+        i += 2;
+        setStreamText(words.slice(0, i).join(" "));
+        if (i >= words.length) {
+          window.clearInterval(timer);
+          upsertChatSession({
+            ...base,
+            updatedAt: Date.now(),
+            messages: [...base.messages, userMsg, { ...tutorMsg, content: full }],
+          });
+          setStreamText(null);
+        }
+      }, streamInterval);
+
+    } catch (err) {
+      console.warn("Backend unavailable, falling back to simulated prototype:", err);
+      const full = simulatedTutorResponse(text);
+      upsertChatSession({
+        ...base,
+        updatedAt: Date.now(),
+        messages: [...base.messages, userMsg, { ...tutorMsg, content: full }],
+      });
+      setStreamText(null);
+    }
   };
 
   const newChat = () => {

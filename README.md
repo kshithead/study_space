@@ -1,32 +1,48 @@
-# React + TypeScript + Vite
+# StudySpace — AI-Powered Personal Learning Assistant
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A document-grounded learning platform combining **RAG**, **AI-generated practice**, **learning analytics**, and **personalized study planning**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🌟 Key Features
 
-## React Compiler
+1. **Document-Grounded RAG Tutor**: Upload course lecture notes (PDFs), ask questions, and receive grounded answers backed by specific page references and citations.
+2. **AI Practice (Quizzes & Flashcards)**: Generate contextual practice questions (MCQs) and active recall flashcards straight from lecture contents.
+3. **Weak-Topic Learning Analytics**: Automatically track question accuracy across topics to identify concepts needing revision.
+4. **Personalized Study Planner**: Generate structured study schedules based on exam dates, daily available study hours, and weak topics.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🛠️ Architecture & Tech Stack
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Base UI, Recharts, Lucide Icons
+- **Backend API**: Python 3.14, FastAPI, Uvicorn, Pydantic
+- **Document Processing & RAG**: PyPDF, ChromaDB (Vector Store), Google Gemini API
+- **State Management**: React Context with LocalStorage persistence
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+---
+
+## 🚀 Running the Project Locally
+
+### 1. Frontend Setup
+```bash
+# Navigate to the root directory
+npm install
+npm run dev
 ```
+The React application will be available at `http://localhost:5173/`.
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 2. Backend Setup
+```bash
+# Activate python virtual environment
+./venv/Scripts/activate
+
+# Run FastAPI server
+uvicorn backend.main:app --reload --port 8000
+```
+The interactive API documentation (Swagger UI) is accessible at `http://localhost:8000/docs`.
+
+---
+
+## 👥 Authors
+Major Project — Department of Computer Engineering, Vishwakarma University, Pune.

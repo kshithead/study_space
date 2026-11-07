@@ -1,0 +1,464 @@
+/* Scoped login-page-04 styles for STUDYSPACE */
+
+.cl-login04 {
+  --cl-login04-ink: #fff;
+  --cl-login04-soft: rgba(255, 255, 255, 0.86);
+  --cl-login04-glass: rgba(255, 255, 255, 0.14);
+  --cl-login04-edge: rgba(255, 255, 255, 0.34);
+  --cl-login04-field: rgba(255, 255, 255, 0.16);
+  --cl-login04-solid: #231a52;
+  --cl-login04-error: #ffe4e6;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 440px);
+  gap: clamp(32px, 6vw, 96px);
+  align-items: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 48px clamp(16px, 7vw, 120px);
+  overflow: hidden;
+  background: var(--cl-login04-solid);
+  color: var(--cl-login04-ink);
+  line-height: 1.5;
+  isolation: isolate;
+  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+}
+
+.cl-login04 *,
+.cl-login04 *::before,
+.cl-login04 *::after {
+  box-sizing: border-box;
+}
+
+.cl-login04 [hidden] {
+  display: none !important;
+}
+
+.cl-login04::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, rgba(10, 8, 40, 0.55), rgba(10, 8, 40, 0.15) 60%, rgba(10, 8, 40, 0.35));
+}
+
+.cl-login04__bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cl-login04__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.cl-login04__kicker {
+  margin: 48px 0 10px;
+  color: var(--cl-login04-soft);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cl-login04__headline {
+  max-width: 15ch;
+  margin: 0 0 28px;
+  font-size: clamp(34px, 5vw, 64px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.3);
+}
+
+.cl-login04__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cl-login04__chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px 6px 8px;
+  border: 1px solid var(--cl-login04-edge);
+  border-radius: 999px;
+  background: rgba(20, 16, 60, 0.45);
+  font-size: 14px;
+  font-weight: 500;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.cl-login04__chips li span {
+  width: 16px;
+  height: 16px;
+  margin-right: -8px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+}
+
+.cl-login04__chips li span:nth-child(3) {
+  margin-right: 6px;
+}
+
+.cl-login04__glass {
+  padding: clamp(24px, 5vw, 40px);
+  border: 1px solid var(--cl-login04-edge);
+  border-radius: 28px;
+  background: var(--cl-login04-glass);
+  box-shadow: 0 30px 60px -20px rgba(8, 6, 30, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .cl-login04__glass {
+    background: var(--cl-login04-solid);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .cl-login04__glass {
+    background: var(--cl-login04-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+.cl-login04__title {
+  margin: 0 0 4px;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.cl-login04__sub {
+  margin: 0 0 26px;
+  color: var(--cl-login04-soft);
+  font-size: 16px;
+}
+
+.cl-login04__field {
+  margin-bottom: 16px;
+}
+
+.cl-login04__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cl-login04__input {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 14px;
+  background: var(--cl-login04-field);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cl-login04__input::placeholder {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.cl-login04__input:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.cl-login04__input:focus {
+  outline: none;
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22);
+}
+
+.cl-login04__pw {
+  position: relative;
+}
+
+.cl-login04__pw .cl-login04__input {
+  padding-right: 54px;
+}
+
+.cl-login04__eye {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.cl-login04__eye:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.cl-login04__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 4px 0 22px;
+}
+
+.cl-login04__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cl-login04__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #fff;
+}
+
+.cl-login04__link {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.5);
+  text-underline-offset: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.cl-login04__link:hover {
+  text-decoration-color: #fff;
+}
+
+.cl-login04__submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  color: #1e1250;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cl-login04__submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.5);
+}
+
+.cl-login04__submit svg {
+  transition: transform 0.15s ease;
+}
+
+.cl-login04__submit:hover svg {
+  transform: translateX(3px);
+}
+
+.cl-login04__or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 16px;
+  color: var(--cl-login04-soft);
+  font-size: 13px;
+}
+
+.cl-login04__or::before,
+.cl-login04__or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.cl-login04__social {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.cl-login04__icon-btn {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cl-login04__icon-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cl-login04__foot {
+  margin: 22px 0 0;
+  color: var(--cl-login04-soft);
+  font-size: 14px;
+  text-align: center;
+}
+
+.cl-login04__brand:focus-visible,
+.cl-login04__eye:focus-visible,
+.cl-login04__check input:focus-visible,
+.cl-login04__link:focus-visible,
+.cl-login04__submit:focus-visible,
+.cl-login04__icon-btn:focus-visible,
+.cl-login04__ghost:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+.cl-login04__error {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: rgba(159, 18, 57, 0.75);
+  color: var(--cl-login04-error);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cl-login04__demo {
+  margin: 14px 0 0;
+  color: var(--cl-login04-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+.cl-login04__done {
+  text-align: center;
+}
+
+.cl-login04__done:focus {
+  outline: none;
+}
+
+.cl-login04__swatches {
+  display: inline-flex;
+  margin: 8px 0 18px;
+}
+
+.cl-login04__swatches span {
+  width: 40px;
+  height: 40px;
+  margin-left: -10px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #fb7185;
+}
+
+.cl-login04__swatches span:first-child {
+  margin-left: 0;
+}
+
+.cl-login04__swatches span:nth-child(2) {
+  background: #f97316;
+}
+
+.cl-login04__swatches span:nth-child(3) {
+  background: #38bdf8;
+}
+
+.cl-login04__swatches span:nth-child(4) {
+  background: #a855f7;
+}
+
+.cl-login04__ghost {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 14px;
+}
+
+.cl-login04__back-btn {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  backdrop-filter: blur(10px);
+  transition: background-color 0.15s ease;
+}
+
+.cl-login04__back-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+@media (max-width: 900px) {
+  .cl-login04 {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 64px;
+  }
+
+  .cl-login04__kicker {
+    margin-top: 28px;
+  }
+
+  .cl-login04__headline {
+    font-size: 34px;
+    margin-bottom: 18px;
+  }
+
+  .cl-login04__chips {
+    display: none;
+  }
+}

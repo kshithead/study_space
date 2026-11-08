@@ -138,3 +138,4 @@ def update_user_profile(
 
 # Initialize database on module load
 init_db()
+

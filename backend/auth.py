@@ -94,3 +94,4 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
         )
         
     return user
+

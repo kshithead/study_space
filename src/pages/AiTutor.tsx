@@ -170,15 +170,23 @@ export default function AiTutor() {
     setStreamText("Thinking and retrieving relevant notes...");
 
     try {
-      // Connect to real FastAPI backend
-      const response = await fetch("http://127.0.0.1:8000/api/study/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text }),
-      });
+      const apiBase =
+        import.meta.env.VITE_API_URL ||
+        (typeof window !== "undefined" && window.location.protocol === "https:"
+          ? ""
+          : "http://127.0.0.1:8000");
+
+      let response: Response | null = null;
+      if (apiBase || window.location.protocol !== "https:") {
+        response = await fetch(`${apiBase}/api/study/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: text }),
+        });
+      }
       
       let full = "";
-      if (response.ok) {
+      if (response && response.ok) {
         const data = await response.json();
         full = data.answer || "No response received from tutor.";
         if (data.sources && data.sources.length > 0) {

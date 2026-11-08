@@ -35,10 +35,18 @@ export default function StudyMaterials() {
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getApiBase = () =>
+    import.meta.env.VITE_API_URL ||
+    (typeof window !== "undefined" && window.location.protocol === "https:"
+      ? ""
+      : "http://127.0.0.1:8000");
+
   // Fetch real uploaded documents from backend
   const fetchDocs = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/documents");
+      const apiBase = getApiBase();
+      if (!apiBase && window.location.protocol === "https:") return;
+      const res = await fetch(`${apiBase}/api/documents`);
       if (res.ok) {
         const data = await res.json();
         setUploadedDocs(data);
@@ -70,7 +78,8 @@ export default function StudyMaterials() {
       formData.append("title", file.name.replace(/\.[^/.]+$/, ""));
       formData.append("course", "Academic Study Material");
 
-      const res = await fetch("http://127.0.0.1:8000/api/documents/upload", {
+      const apiBase = getApiBase();
+      const res = await fetch(`${apiBase}/api/documents/upload`, {
         method: "POST",
         body: formData,
       });

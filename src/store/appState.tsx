@@ -61,7 +61,10 @@ export function normalizeUser(u: any): UserProfile {
     weeklyGoalHours: typeof u.weeklyGoalHours === "number" ? u.weeklyGoalHours : 6,
     hoursThisWeek: typeof u.hoursThisWeek === "number" ? u.hoursThisWeek : 2.5,
     joined: u.joined || "November 2026",
-    interests: Array.isArray(u.interests) && u.interests.length > 0 ? u.interests : [u.learningTrack || "General Studies", "Learning Science"],
+    interests:
+      Array.isArray(u.interests) && u.interests.length > 0
+        ? u.interests
+        : [u.learningTrack || "General Studies", "Learning Science"],
     authProvider: u.authProvider || u.auth_provider || "local",
   };
 }
@@ -77,11 +80,71 @@ interface QuizScore {
   attempts: number;
 }
 
+export interface UserProgressData {
+  enrolledCourses: string[];
+  completed: Record<string, string[]>;
+  bookmarks: string[];
+  quizScores: Record<string, QuizScore>;
+  notes: Record<string, string>;
+  focusTasks: FocusTask[];
+}
+
+const DEMO_PROGRESS: UserProgressData = {
+  enrolledCourses: ["c-python", "c1", "c2", "c3", "c9", "c10"],
+  completed: completedSeed,
+  bookmarks: bookmarkSeed,
+  quizScores: quizScoreSeed,
+  notes: {
+    "c1-m2-l2":
+      "Remember: local sensitivities propagate backwards — check the ledger analogy before the lab.",
+  },
+  focusTasks: [
+    { id: "ft1", text: "Finish 'Computational Graphs' lesson", done: false },
+    { id: "ft2", text: "Review 15 AI flashcards", done: true },
+    { id: "ft3", text: "Draft flashcards for optimizer chapter", done: false },
+  ],
+};
+
+const BLANK_PROGRESS: UserProgressData = {
+  enrolledCourses: [],
+  completed: {},
+  bookmarks: [],
+  quizScores: {},
+  notes: {},
+  focusTasks: [
+    { id: "ft1", text: "Explore the course catalog and start your first lesson", done: false },
+    { id: "ft2", text: "Ask Socrates AI Tutor a question about your course materials", done: false },
+  ],
+};
+
+function getUserProgressKey(userId?: string): string {
+  return `ss.progress_v3.${userId || "guest"}`;
+}
+
+function loadUserProgress(userId?: string, email?: string): UserProgressData {
+  const isDemo = userId === "usr_demo_alex" || email === "alex.carter@studyspace.app";
+  const key = getUserProgressKey(userId);
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error("Failed to parse progress for user", userId, e);
+  }
+  // Demo student receives pre-populated curriculum; all other accounts start fresh at 0%
+  return isDemo ? DEMO_PROGRESS : BLANK_PROGRESS;
+}
+
 interface AppStateValue {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
   mobileNavOpen: boolean;
   setMobileNavOpen: (open: boolean) => void;
+  enrolledCourses: string[];
+  isEnrolled: (courseId: string) => boolean;
+  enrollCourse: (courseId: string) => void;
+  unenrollCourse: (courseId: string) => void;
   bookmarks: string[];
   toggleBookmark: (courseId: string) => void;
   completed: Record<string, string[]>;
@@ -123,21 +186,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     "ss.mobileNav.open",
     false,
   );
-  const [bookmarks, setBookmarks] = usePersistentState<string[]>(
-    "ss.bookmarks",
-    bookmarkSeed,
-  );
-  const [completed, setCompleted] = usePersistentState<Record<string, string[]>>(
-    "ss.completed",
-    completedSeed,
-  );
-  const [notes, setNotes] = usePersistentState<Record<string, string>>(
-    "ss.notes",
-    {
-      "c1-m2-l2":
-        "Remember: local sensitivities propagate backwards — check the ledger analogy before the lab.",
-    },
-  );
   const [chatSessions, setChatSessions] = usePersistentState<ChatSession[]>(
     "ss.chats",
     seedChatSessions,
@@ -146,30 +194,49 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     date: string;
     count: number;
   }>("ss.pomodoros", { date: todayKey(), count: 2 });
-  const [quizScores, setQuizScores] = usePersistentState<
-    Record<string, QuizScore>
-  >("ss.quizScores", quizScoreSeed);
-  const [focusTasks, setFocusTasks] = usePersistentState<FocusTask[]>(
-    "ss.focusTasks",
-    [
-      { id: "ft1", text: "Finish 'Computational Graphs' lesson", done: false },
-      { id: "ft2", text: "Review 15 AI flashcards", done: true },
-      { id: "ft3", text: "Draft flashcards for optimizer chapter", done: false },
-    ],
-  );
   const [notificationsRead, setNotificationsRead] = usePersistentState(
     "ss.notifsRead",
     false,
   );
+
+  // Authenticated user state
   const [storedUser, setStoredUser] = usePersistentState<any>("ss.user", defaultUser);
   const [user, setUserState] = useState<UserProfile>(() => normalizeUser(storedUser));
+
+  // User-scoped progress state (strictly isolated per user account)
+  const [userProgress, setUserProgress] = useState<UserProgressData>(() =>
+    loadUserProgress(user.id, user.email)
+  );
 
   // Sync storedUser changes
   useEffect(() => {
     setUserState(normalizeUser(storedUser));
   }, [storedUser]);
 
-  // On initial mount, fetch current authenticated user from backend if token exists
+  // When active user ID or email changes, switch immediately to their isolated progress
+  useEffect(() => {
+    const p = loadUserProgress(user.id, user.email);
+    setUserProgress(p);
+  }, [user.id, user.email]);
+
+  // Helper to persist user-scoped progress changes
+  const saveUserProgress = useCallback(
+    (updater: (prev: UserProgressData) => UserProgressData) => {
+      setUserProgress((prev) => {
+        const next = updater(prev);
+        const key = getUserProgressKey(user.id);
+        try {
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch (e) {
+          console.error("Failed to save progress for user:", user.id, e);
+        }
+        return next;
+      });
+    },
+    [user.id]
+  );
+
+  // On initial mount, fetch current authenticated user from backend/supabase
   useEffect(() => {
     let isMounted = true;
     async function loadAuth() {
@@ -230,45 +297,91 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [setSidebarCollapsed],
   );
 
-  const toggleBookmark = useCallback(
-    (courseId: string) =>
-      setBookmarks((prev) =>
-        prev.includes(courseId)
-          ? prev.filter((id) => id !== courseId)
-          : [...prev, courseId],
-      ),
-    [setBookmarks],
+  // Course Enrollment
+  const isEnrolled = useCallback(
+    (courseId: string) => {
+      return (
+        userProgress.enrolledCourses.includes(courseId) ||
+        (userProgress.completed[courseId] ?? []).length > 0
+      );
+    },
+    [userProgress.enrolledCourses, userProgress.completed]
   );
 
+  const enrollCourse = useCallback(
+    (courseId: string) => {
+      saveUserProgress((prev) => ({
+        ...prev,
+        enrolledCourses: prev.enrolledCourses.includes(courseId)
+          ? prev.enrolledCourses
+          : [...prev.enrolledCourses, courseId],
+      }));
+    },
+    [saveUserProgress]
+  );
+
+  const unenrollCourse = useCallback(
+    (courseId: string) => {
+      saveUserProgress((prev) => ({
+        ...prev,
+        enrolledCourses: prev.enrolledCourses.filter((id) => id !== courseId),
+      }));
+    },
+    [saveUserProgress]
+  );
+
+  // Bookmarks
+  const toggleBookmark = useCallback(
+    (courseId: string) => {
+      saveUserProgress((prev) => ({
+        ...prev,
+        bookmarks: prev.bookmarks.includes(courseId)
+          ? prev.bookmarks.filter((id) => id !== courseId)
+          : [...prev.bookmarks, courseId],
+      }));
+    },
+    [saveUserProgress]
+  );
+
+  // Lessons Completion & XP Rewards
   const markLesson = useCallback(
-    (courseId: string, lessonId: string, done: boolean) =>
-      setCompleted((prev) => {
-        const list = prev[courseId] ?? [];
+    (courseId: string, lessonId: string, done: boolean) => {
+      saveUserProgress((prev) => {
+        const list = prev.completed[courseId] ?? [];
+        const updatedList = done
+          ? list.includes(lessonId)
+            ? list
+            : [...list, lessonId]
+          : list.filter((id) => id !== lessonId);
+
+        const enrolled = prev.enrolledCourses.includes(courseId)
+          ? prev.enrolledCourses
+          : [...prev.enrolledCourses, courseId];
+
         return {
           ...prev,
-          [courseId]: done
-            ? list.includes(lessonId)
-              ? list
-              : [...list, lessonId]
-            : list.filter((id) => id !== lessonId),
+          enrolledCourses: enrolled,
+          completed: {
+            ...prev.completed,
+            [courseId]: updatedList,
+          },
         };
-      }),
-    [setCompleted],
+      });
+
+      // Reward XP (+50 XP per lesson finished)
+      if (done) {
+        updateUser({ xp: (user.xp || 150) + 50 });
+      }
+    },
+    [saveUserProgress, updateUser, user.xp]
   );
 
   const toggleLesson = useCallback(
-    (courseId: string, lessonId: string) =>
-      setCompleted((prev) => {
-        const list = prev[courseId] ?? [];
-        const done = !list.includes(lessonId);
-        return {
-          ...prev,
-          [courseId]: done
-            ? [...list, lessonId]
-            : list.filter((id) => id !== lessonId),
-        };
-      }),
-    [setCompleted],
+    (courseId: string, lessonId: string) => {
+      const isDone = (userProgress.completed[courseId] ?? []).includes(lessonId);
+      markLesson(courseId, lessonId, !isDone);
+    },
+    [userProgress.completed, markLesson]
   );
 
   const courseProgress = useCallback(
@@ -277,15 +390,20 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (!course) return 0;
       const total = courseLessons(course).length;
       if (total === 0) return 0;
-      return Math.round(((completed[courseId] ?? []).length / total) * 100);
+      const doneCount = (userProgress.completed[courseId] ?? []).length;
+      return Math.min(100, Math.round((doneCount / total) * 100));
     },
-    [completed],
+    [userProgress.completed]
   );
 
   const setNote = useCallback(
-    (lessonId: string, text: string) =>
-      setNotes((prev) => ({ ...prev, [lessonId]: text })),
-    [setNotes],
+    (lessonId: string, text: string) => {
+      saveUserProgress((prev) => ({
+        ...prev,
+        notes: { ...prev.notes, [lessonId]: text },
+      }));
+    },
+    [saveUserProgress]
   );
 
   const upsertChatSession = useCallback(
@@ -317,40 +435,49 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   const recordQuizScore = useCallback(
-    (quizId: string, pct: number) =>
-      setQuizScores((prev) => {
-        const cur = prev[quizId];
+    (quizId: string, pct: number) => {
+      saveUserProgress((prev) => {
+        const cur = prev.quizScores[quizId];
         return {
           ...prev,
-          [quizId]: {
-            best: Math.max(cur?.best ?? 0, pct),
-            attempts: (cur?.attempts ?? 0) + 1,
+          quizScores: {
+            ...prev.quizScores,
+            [quizId]: {
+              best: Math.max(cur?.best ?? 0, pct),
+              attempts: (cur?.attempts ?? 0) + 1,
+            },
           },
         };
-      }),
-    [setQuizScores],
+      });
+    },
+    [saveUserProgress]
   );
 
   const addFocusTask = useCallback(
     (text: string) =>
-      setFocusTasks((prev) => [
+      saveUserProgress((prev) => ({
         ...prev,
-        { id: `ft-${Date.now()}`, text, done: false },
-      ]),
-    [setFocusTasks],
+        focusTasks: [...prev.focusTasks, { id: `ft-${Date.now()}`, text, done: false }],
+      })),
+    [saveUserProgress]
   );
 
   const toggleFocusTask = useCallback(
     (id: string) =>
-      setFocusTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
-      ),
-    [setFocusTasks],
+      saveUserProgress((prev) => ({
+        ...prev,
+        focusTasks: prev.focusTasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
+      })),
+    [saveUserProgress]
   );
 
   const removeFocusTask = useCallback(
-    (id: string) => setFocusTasks((prev) => prev.filter((t) => t.id !== id)),
-    [setFocusTasks],
+    (id: string) =>
+      saveUserProgress((prev) => ({
+        ...prev,
+        focusTasks: prev.focusTasks.filter((t) => t.id !== id),
+      })),
+    [saveUserProgress]
   );
 
   const markNotificationsRead = useCallback(
@@ -364,13 +491,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       toggleSidebar,
       mobileNavOpen,
       setMobileNavOpen,
-      bookmarks,
+      enrolledCourses: userProgress.enrolledCourses,
+      isEnrolled,
+      enrollCourse,
+      unenrollCourse,
+      bookmarks: userProgress.bookmarks,
       toggleBookmark,
-      completed,
+      completed: userProgress.completed,
       toggleLesson,
       markLesson,
       courseProgress,
-      notes,
+      notes: userProgress.notes,
       setNote,
       chatSessions,
       upsertChatSession,
@@ -378,9 +509,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       pomodorosToday:
         pomodoroTally.date === todayKey() ? pomodoroTally.count : 0,
       incrementPomodoros,
-      quizScores,
+      quizScores: userProgress.quizScores,
       recordQuizScore,
-      focusTasks,
+      focusTasks: userProgress.focusTasks,
       addFocusTask,
       toggleFocusTask,
       removeFocusTask,
@@ -396,22 +527,26 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       sidebarCollapsed,
       toggleSidebar,
       mobileNavOpen,
-      bookmarks,
+      userProgress.enrolledCourses,
+      isEnrolled,
+      enrollCourse,
+      unenrollCourse,
+      userProgress.bookmarks,
       toggleBookmark,
-      completed,
+      userProgress.completed,
       toggleLesson,
       markLesson,
       courseProgress,
-      notes,
+      userProgress.notes,
       setNote,
       chatSessions,
       upsertChatSession,
       deleteChatSession,
       pomodoroTally,
       incrementPomodoros,
-      quizScores,
+      userProgress.quizScores,
       recordQuizScore,
-      focusTasks,
+      userProgress.focusTasks,
       addFocusTask,
       toggleFocusTask,
       removeFocusTask,

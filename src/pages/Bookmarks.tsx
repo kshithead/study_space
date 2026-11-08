@@ -6,7 +6,7 @@ import { EmptyState, PageHeader } from "@/components/shared";
 import { Link } from "react-router-dom";
 
 export default function Bookmarks() {
-  const { bookmarks } = useAppState();
+  const { bookmarks, isEnrolled } = useAppState();
   const saved = allCourses.filter((c) => bookmarks.includes(c.id));
 
   return (
@@ -32,7 +32,7 @@ export default function Bookmarks() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {saved.map((c) => (
-            <CourseCard key={c.id} course={c} showProgress={c.enrolled} />
+            <CourseCard key={c.id} course={c} showProgress={isEnrolled(c.id)} />
           ))}
         </div>
       )}

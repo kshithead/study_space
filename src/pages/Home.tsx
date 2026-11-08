@@ -44,16 +44,16 @@ function greeting() {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { completed, courseProgress, user: currentUser } = useAppState();
+  const { completed, courseProgress, isEnrolled, user: currentUser } = useAppState();
   const user = currentUser ?? mockUser;
 
   const inProgress = allCourses
-    .filter((c) => c.enrolled && courseProgress(c.id) < 100)
+    .filter((c) => isEnrolled(c.id) && courseProgress(c.id) < 100)
     .sort((a, b) => courseProgress(b.id) - courseProgress(a.id));
   const spotlight = inProgress[0];
-  const recommended = allCourses.filter((c) => !c.enrolled).slice(0, 6);
+  const recommended = allCourses.filter((c) => !isEnrolled(c.id)).slice(0, 6);
   const recentlyWatched = allCourses.filter(
-    (c) => c.enrolled && courseProgress(c.id) > 0,
+    (c) => isEnrolled(c.id) && courseProgress(c.id) > 0,
   ).slice(0, 3);
 
   const nextLessonOf = (course: Course) => {

@@ -4,6 +4,7 @@ import { Search, X } from "lucide-react";
 import { allCourses } from "@/data/mockData";
 import { CourseCard } from "@/components/CourseCard";
 import { EmptyState } from "@/components/shared";
+import { useAppState } from "@/store/appState";
 import {
   Select,
   SelectContent,
@@ -26,6 +27,7 @@ const sortOptions: Record<string, string> = {
 };
 
 export default function Explore() {
+  const { isEnrolled } = useAppState();
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
   const [category, setCategory] = useState("All Topics");
@@ -151,7 +153,7 @@ export default function Explore() {
           className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
         >
           {results.map((c) => (
-            <CourseCard key={c.id} course={c} showProgress={c.enrolled} />
+            <CourseCard key={c.id} course={c} showProgress={isEnrolled(c.id)} />
           ))}
         </div>
       )}

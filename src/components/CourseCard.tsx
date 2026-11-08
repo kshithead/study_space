@@ -8,14 +8,16 @@ import { cn } from "@/lib/utils";
 
 export function CourseCard({
   course,
-  showProgress = false,
+  showProgress,
 }: {
   course: Course;
   showProgress?: boolean;
 }) {
-  const { bookmarks, toggleBookmark, courseProgress } = useAppState();
+  const { bookmarks, toggleBookmark, courseProgress, isEnrolled } = useAppState();
   const saved = bookmarks.includes(course.id);
+  const enrolled = isEnrolled(course.id);
   const progress = courseProgress(course.id);
+  const shouldShowProgress = showProgress !== undefined ? showProgress : enrolled;
 
   return (
     <Link
@@ -87,7 +89,7 @@ export function CourseCard({
             {course.level}
           </span>
         </div>
-        {showProgress ? (
+        {shouldShowProgress && (enrolled || progress > 0) ? (
           <div className="mt-1 flex items-center gap-2">
             <ProgressBar value={progress} className="h-1" />
             <span className="shrink-0 text-[11px] font-medium text-violet-300">

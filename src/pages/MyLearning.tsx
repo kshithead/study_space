@@ -8,9 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 export default function MyLearning() {
-  const { bookmarks, courseProgress, completed } = useAppState();
+  const { bookmarks, courseProgress, completed, isEnrolled } = useAppState();
 
-  const enrolled = allCourses.filter((c) => c.enrolled);
+  const enrolled = allCourses.filter((c) => isEnrolled(c.id));
   const inProgress = enrolled.filter((c) => courseProgress(c.id) < 100);
   const finished = enrolled.filter((c) => courseProgress(c.id) >= 100);
   const saved = allCourses.filter((c) => bookmarks.includes(c.id));
@@ -126,7 +126,7 @@ export default function MyLearning() {
           ) : (
             <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3")}>
               {saved.map((c) => (
-                <CourseCard key={c.id} course={c} showProgress={c.enrolled} />
+                <CourseCard key={c.id} course={c} showProgress={isEnrolled(c.id)} />
               ))}
             </div>
           )}

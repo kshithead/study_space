@@ -86,8 +86,22 @@ function LessonKindIcon({ lesson }: { lesson: Lesson }) {
 }
 
 function CourseWorkspace({ course }: { course: Course }) {
-  const { completed, toggleLesson, markLesson, courseProgress, notes, setNote } =
-    useAppState();
+  const {
+    completed,
+    toggleLesson,
+    markLesson,
+    courseProgress,
+    notes,
+    setNote,
+    isEnrolled,
+    enrollCourse,
+  } = useAppState();
+
+  useEffect(() => {
+    if (course?.id && !isEnrolled(course.id)) {
+      enrollCourse(course.id);
+    }
+  }, [course?.id, isEnrolled, enrollCourse]);
 
   const allLessons = useMemo(() => course.modules.flatMap((m) => m.lessons), [course]);
   const done = completed[course.id] ?? [];

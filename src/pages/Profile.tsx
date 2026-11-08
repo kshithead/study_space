@@ -37,6 +37,7 @@ export default function Profile() {
     courseProgress,
     completed,
     quizScores,
+    isEnrolled,
     user,
     updateUser,
     logout,
@@ -87,8 +88,8 @@ export default function Profile() {
     }
   }, [user.name, user.bio, user.learningTrack, isEditing]);
 
-  // Safe calculated statistics
-  const enrolled = allCourses.filter((c) => c.enrolled);
+  // Safe calculated statistics (user-scoped)
+  const enrolled = allCourses.filter((c) => isEnrolled(c.id));
   const lessonsDone = Object.values(completed || {}).reduce((n, l) => n + (l?.length || 0), 0);
   const scores = Object.values(quizScores || {});
   const avgAccuracy =

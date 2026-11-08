@@ -24,6 +24,7 @@ import {
   user as mockUser,
 } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
+import { DEFAULT_NEUTRAL_AVATAR } from "@/services/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,6 +104,7 @@ export default function Navbar() {
     notificationsRead,
     markNotificationsRead,
     user: currentUser,
+    isAuthenticated,
     logout,
   } = useAppState();
   const user = currentUser ?? mockUser;
@@ -334,59 +336,72 @@ export default function Navbar() {
           <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownMenuTrigger
               data-testid="user-profile-menu-trigger"
-              className="rounded-full ring-2 ring-transparent transition-all hover:ring-violet-600/60"
+              className="group relative flex items-center gap-2 rounded-full p-0.5 transition-all hover:ring-2 hover:ring-violet-600/60 focus:outline-none"
+              aria-label="User Profile Menu"
             >
               <img
-                src={user.avatar}
-                alt={user.name}
-                className="size-9 rounded-full object-cover"
+                src={user.avatar || DEFAULT_NEUTRAL_AVATAR}
+                alt={user.name || "Student"}
+                onError={(e) => {
+                  e.currentTarget.src = DEFAULT_NEUTRAL_AVATAR;
+                }}
+                className="size-9 rounded-full bg-[#18152e] object-cover border border-white/10"
               />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
               sideOffset={8}
-              className="w-64 border-[#2e2e33] bg-popover"
+              className="w-64 border-[#2e2e33] bg-popover shadow-xl"
             >
-              <DropdownMenuLabel>
-                <span className="block text-sm font-semibold text-zinc-100">
-                  {user.name}
+              <DropdownMenuLabel className="pb-2">
+                <span className="block text-sm font-semibold text-zinc-100 truncate">
+                  {user.name || "Student"}
                 </span>
-                <span className="block text-xs font-normal text-muted-foreground">
-                  {user.handle} · Level {user.level} {user.levelName}
+                <span className="block text-xs font-normal text-muted-foreground truncate">
+                  {user.email || (user.handle ? `${user.handle} · Level ${user.level || 1}` : "Guest Session")}
                 </span>
+                {isAuthenticated && (
+                  <span className="mt-1 inline-block rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                    Connected Account
+                  </span>
+                )}
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-[#27272a]" />
               <DropdownMenuItem
                 data-testid="menu-profile"
-                className="gap-2.5"
+                className="gap-2.5 cursor-pointer font-medium text-zinc-100 hover:text-white"
                 onClick={() => go("/profile")}
               >
-                <User className="size-4" /> Profile
+                <User className="size-4 text-violet-400" /> View Profile
               </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2.5" onClick={() => go("/analytics")}>
-                <BarChart3 className="size-4" /> Learning Analytics
+              <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => go("/analytics")}>
+                <BarChart3 className="size-4 text-blue-400" /> Learning Analytics
               </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2.5" onClick={() => go("/settings")}>
-                <Settings className="size-4" /> Settings
+              <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => go("/settings")}>
+                <Settings className="size-4 text-zinc-400" /> Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-[#27272a]" />
-              <DropdownMenuItem
-                className="gap-2.5 text-violet-300 focus:text-violet-200"
-                onClick={() => go("/login")}
-              >
-                <LogIn className="size-4" /> Switch Profile / Sign in
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2.5 text-red-400 focus:text-red-300"
-                onClick={() => {
-                  logout();
-                  toast.success("Signed out", {
-                    description: "You are now browsing in guest mode.",
-                  });
-                }}
-              >
-                <LogOut className="size-4" /> Sign out
-              </DropdownMenuItem>
+              {isAuthenticated ? (
+                <DropdownMenuItem
+                  className="gap-2.5 text-red-400 focus:text-red-300 cursor-pointer"
+                  onClick={() => {
+                    logout();
+                    toast.success("Signed out", {
+                      description: "You have been logged out of your account.",
+                    });
+                    navigate("/login");
+                  }}
+                >
+                  <LogOut className="size-4" /> Sign out
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  className="gap-2.5 text-violet-300 focus:text-violet-200 cursor-pointer"
+                  onClick={() => go("/login")}
+                >
+                  <LogIn className="size-4" /> Sign in / Register
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

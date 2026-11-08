@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   bookmarkSeed,
@@ -10,8 +10,60 @@ import {
 import type { ChatSession } from "@/data/mockData";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { getCourse, courseLessons } from "@/data/mockData";
+import {
+  UserProfile,
+  DEFAULT_NEUTRAL_AVATAR,
+  authStorage,
+  fetchCurrentUser,
+} from "@/services/auth";
 
-export type UserProfile = typeof defaultUser;
+export type { UserProfile };
+
+const defaultGuestUser: UserProfile = {
+  id: "guest",
+  email: "guest@studyspace.app",
+  name: "Guest Student",
+  firstName: "Guest",
+  avatar: DEFAULT_NEUTRAL_AVATAR,
+  bio: "Welcome to StudySpace! Sign in to track your learning journey.",
+  learningTrack: "General Studies",
+  handle: "@guest.learner",
+  streak: 1,
+  level: 1,
+  levelName: "Explorer",
+  xp: 150,
+  xpToNext: 1000,
+  weeklyGoalHours: 6,
+  hoursThisWeek: 1.5,
+  joined: "November 2026",
+  interests: ["General Studies", "Learning Science", "Problem Solving"],
+  authProvider: "local",
+};
+
+export function normalizeUser(u: any): UserProfile {
+  if (!u) return defaultGuestUser;
+  const name = u.name || u.full_name || "Student";
+  const firstName = u.firstName || (name ? name.split(" ")[0] : "Student");
+  return {
+    id: String(u.id || "usr_student"),
+    email: u.email || "student@studyspace.app",
+    name,
+    firstName,
+    avatar: u.avatar && u.avatar.trim() ? u.avatar : DEFAULT_NEUTRAL_AVATAR,
+    bio: u.bio || "",
+    learningTrack: u.learningTrack || u.learning_track || "General Studies",
+    handle: u.handle || `@${firstName.toLowerCase()}.learns`,
+    streak: typeof u.streak === "number" ? u.streak : 1,
+    level: typeof u.level === "number" ? u.level : 1,
+    levelName: u.levelName || u.level_name || "Explorer",
+    xp: typeof u.xp === "number" ? u.xp : 150,
+    xpToNext: typeof u.xpToNext === "number" ? u.xpToNext : 1000,
+    hoursThisWeek: typeof u.hoursThisWeek === "number" ? u.hoursThisWeek : 2.5,
+    joined: u.joined || "November 2026",
+    interests: Array.isArray(u.interests) && u.interests.length > 0 ? u.interests : [u.learningTrack || "General Studies", "Learning Science"],
+    authProvider: u.authProvider || u.auth_provider || "local",
+  };
+}
 
 export interface FocusTask {
   id: string;
@@ -51,6 +103,7 @@ interface AppStateValue {
   notificationsRead: boolean;
   markNotificationsRead: () => void;
   user: UserProfile;
+  isAuthenticated: boolean;
   login: (profile: Partial<UserProfile>) => void;
   logout: () => void;
   updateUser: (updates: Partial<UserProfile>) => void;
@@ -107,39 +160,64 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     "ss.notifsRead",
     false,
   );
-  const [user, setUser] = usePersistentState<UserProfile>("ss.user", defaultUser);
+  const [storedUser, setStoredUser] = usePersistentState<any>("ss.user", defaultUser);
+  const [user, setUserState] = useState<UserProfile>(() => normalizeUser(storedUser));
+
+  // Sync storedUser changes
+  useEffect(() => {
+    setUserState(normalizeUser(storedUser));
+  }, [storedUser]);
+
+  // On initial mount, fetch current authenticated user from backend if token exists
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAuth() {
+      const token = authStorage.getToken();
+      if (!token) return;
+      try {
+        const remoteUser = await fetchCurrentUser();
+        if (remoteUser && isMounted) {
+          const norm = normalizeUser(remoteUser);
+          setUserState(norm);
+          setStoredUser(norm);
+        }
+      } catch (err) {
+        console.error("Failed to fetch current user profile:", err);
+      }
+    }
+    loadAuth();
+    return () => {
+      isMounted = false;
+    };
+  }, [setStoredUser]);
+
+  const isAuthenticated = useMemo(() => {
+    return Boolean(authStorage.getToken() && user && user.id !== "guest");
+  }, [user]);
 
   const login = useCallback(
     (profile: Partial<UserProfile>) => {
-      setUser((prev) => ({
-        ...prev,
-        ...profile,
-      }));
+      const norm = normalizeUser({ ...user, ...profile });
+      setUserState(norm);
+      setStoredUser(norm);
     },
-    [setUser],
+    [user, setStoredUser],
   );
 
   const logout = useCallback(() => {
-    setUser({
-      ...defaultUser,
-      name: "Guest Student",
-      firstName: "Guest",
-      handle: "@guest.learner",
-      email: "guest@studyspace.app",
-      streak: 1,
-      level: 1,
-      levelName: "Novice",
-      xp: 150,
-      xpToNext: 1000,
-      hoursThisWeek: 0.5,
-    });
-  }, [setUser]);
+    authStorage.removeToken();
+    const guest = normalizeUser(defaultGuestUser);
+    setUserState(guest);
+    setStoredUser(guest);
+  }, [setStoredUser]);
 
   const updateUser = useCallback(
     (updates: Partial<UserProfile>) => {
-      setUser((prev) => ({ ...prev, ...updates }));
+      const norm = normalizeUser({ ...user, ...updates });
+      setUserState(norm);
+      setStoredUser(norm);
     },
-    [setUser],
+    [user, setStoredUser],
   );
 
   const toggleSidebar = useCallback(
@@ -304,6 +382,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       notificationsRead,
       markNotificationsRead,
       user,
+      isAuthenticated,
       login,
       logout,
       updateUser,
@@ -334,6 +413,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       notificationsRead,
       markNotificationsRead,
       user,
+      isAuthenticated,
       login,
       logout,
       updateUser,

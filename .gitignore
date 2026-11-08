@@ -24,3 +24,14 @@ dist-ssr
 *.sw?
 
 .env
+*.env
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+*.db
+backend/studyspace.db
+backend/uploads/
+venv/
+.venv/
+

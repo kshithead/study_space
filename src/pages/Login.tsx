@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAppState } from "@/store/appState";
+import {
+  DEFAULT_NEUTRAL_AVATAR,
+  getOAuthUrl,
+  loginUser,
+  registerUser,
+} from "@/services/auth";
 import { toast } from "sonner";
 import "./login04.css";
 
@@ -13,67 +19,97 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullname, setFullname] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [done, setDone] = useState(false);
   const [doneTitle, setDoneTitle] = useState("");
   const [doneText, setDoneText] = useState("");
+  const [oauthDialog, setOauthDialog] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
 
-    if (!email.trim()) {
-      setErrorMsg("Enter your email address.");
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setErrorMsg("Please enter your email address.");
       return;
     }
     if (!password || password.length < 6) {
-      setErrorMsg("Password must be at least 6 characters.");
+      setErrorMsg("Password must be at least 6 characters long.");
       return;
     }
 
-    if (mode === "signup") {
-      const name = fullname.trim() || email.split("@")[0];
-      const firstName = name.split(" ")[0];
-      const capitalized = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+    setIsSubmitting(true);
+    try {
+      if (mode === "signup") {
+        if (!fullname.trim()) {
+          setErrorMsg("Please enter your full name.");
+          setIsSubmitting(false);
+          return;
+        }
 
-      login({
-        name,
-        firstName: capitalized,
-        email: email.trim(),
-        handle: `@${capitalized.toLowerCase()}.learns`,
+        const res = await registerUser({
+          email: cleanEmail,
+          password,
+          fullName: fullname.trim(),
+          avatar: DEFAULT_NEUTRAL_AVATAR,
+        });
+
+        login(res.user);
+        setDoneTitle(`Welcome to StudySpace, ${res.user.firstName}!`);
+        setDoneText(
+          "Your student account has been registered in the database. All courses, notes, and the Socrates AI tutor are ready."
+        );
+        setDone(true);
+        toast.success(`Welcome to StudySpace, ${res.user.firstName}! 🎉`);
+      } else {
+        const res = await loginUser({
+          email: cleanEmail,
+          password,
+        });
+
+        login(res.user);
+        setDoneTitle(`Welcome back, ${res.user.firstName}`);
+        setDoneText(
+          "Authenticated with secure session. Your study streak, bookmarked courses, and AI notes are synchronized."
+        );
+        setDone(true);
+        toast.success(`Welcome back, ${res.user.firstName}! 👋`);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Authentication failed. Please verify your credentials.");
+      toast.error("Authentication Error", {
+        description: err.message || "Failed to authenticate.",
       });
-
-      setDoneTitle(`Welcome to StudySpace, ${capitalized}!`);
-      setDoneText("Your student profile has been created. All 12 courses, notes, and Socrates AI tutor are ready.");
-      setDone(true);
-      toast.success(`Welcome to StudySpace, ${capitalized}! 🎉`);
-    } else {
-      const raw = email.split("@")[0].replace(/[._-]+/g, " ");
-      const firstName = raw.charAt(0).toUpperCase() + raw.slice(1);
-
-      login({
-        name: firstName,
-        firstName,
-        email: email.trim(),
-      });
-
-      setDoneTitle(`Welcome back, ${firstName}`);
-      setDoneText("Your study streak, bookmarked courses, and AI notes are synced.");
-      setDone(true);
-      toast.success(`Welcome back, ${firstName}! 👋`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleSocialAuth = (provider: string) => {
-    login({
-      name: `Student (${provider})`,
-      firstName: "Learner",
-      email: `student@${provider.toLowerCase()}.com`,
+  const handleSocialAuth = async (provider: string) => {
+    try {
+      const authUrl = await getOAuthUrl(provider);
+      if (authUrl) {
+        window.location.href = authUrl;
+      }
+    } catch (err: any) {
+      setOauthDialog(
+        `${provider} OAuth requires client credentials (e.g. ${provider.toUpperCase()}_CLIENT_ID) configured in your backend .env file. Direct passwordless bypass is disabled for security. Please use Email & Password registration or configure OAuth.`
+      );
+      toast.error(`${provider} OAuth Not Configured`, {
+        description: "Please sign in with your email and password.",
+      });
+    }
+  };
+
+  const handleFillDemo = () => {
+    setEmail("alex.carter@studyspace.app");
+    setPassword("studyspace2026");
+    setErrorMsg("");
+    toast.info("Demo credentials loaded", {
+      description: "Click 'Sign in' below to verify against the backend database.",
     });
-    setDoneTitle(`Welcome back`);
-    setDoneText(`Authenticated with ${provider}. Redirecting to your dashboard...`);
-    setDone(true);
-    toast.success(`Signed in via ${provider}`);
   };
 
   const handleReset = () => {
@@ -94,7 +130,7 @@ export default function Login() {
         Back to StudySpace
       </Link>
 
-      {/* Exact backdrop image from login-page-04 */}
+      {/* Backdrop image from login-page-04 */}
       <img className="cl-login04__bg" src="/images/backdrop.jpg" width="1200" height="800" alt="" />
 
       {/* Left intro section */}
@@ -134,8 +170,8 @@ export default function Login() {
             </h1>
             <p className="cl-login04__sub">
               {mode === "signup"
-                ? "Start your personalized learning journey today."
-                : "Good to see you again."}
+                ? "Register a permanent account stored in the database."
+                : "Good to see you again. Verify your identity to continue."}
             </p>
 
             <form className="cl-login04__form" onSubmit={handleSubmit} noValidate>
@@ -175,7 +211,6 @@ export default function Login() {
                     if (errorMsg) setErrorMsg("");
                   }}
                 />
-                {errorMsg && <p className="cl-login04__error">{errorMsg}</p>}
               </div>
 
               <div className="cl-login04__field">
@@ -193,7 +228,10 @@ export default function Login() {
                     minLength={6}
                     placeholder="••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errorMsg) setErrorMsg("");
+                    }}
                   />
                   <button
                     className="cl-login04__eye"
@@ -238,47 +276,69 @@ export default function Login() {
                 </div>
               </div>
 
+              {errorMsg && (
+                <div style={{ marginBottom: "16px" }}>
+                  <p className="cl-login04__error">{errorMsg}</p>
+                </div>
+              )}
+
               <div className="cl-login04__row">
                 <label className="cl-login04__check">
                   <input type="checkbox" name="remember" defaultChecked />
                   <span>Remember me</span>
                 </label>
-                <button
-                  type="button"
-                  className="cl-login04__link"
-                  onClick={() => toast.info("Demo reset link sent to your email.")}
-                >
-                  Forgot password?
-                </button>
+                {mode === "signin" && (
+                  <button
+                    type="button"
+                    className="cl-login04__link"
+                    onClick={handleFillDemo}
+                    title="Preload verified demo credentials"
+                  >
+                    Quick fill Demo Student
+                  </button>
+                )}
               </div>
 
-              <button className="cl-login04__submit" type="submit">
-                {mode === "signup" ? "Create an account" : "Sign in"}
-                <svg
-                  viewBox="0 0 24 24"
-                  width="18"
-                  height="18"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
+              <button
+                className="cl-login04__submit"
+                type="submit"
+                disabled={isSubmitting}
+                style={{ opacity: isSubmitting ? 0.75 : 1 }}
+              >
+                {isSubmitting ? (
+                  <span>Authenticating...</span>
+                ) : (
+                  <>
+                    <span>{mode === "signup" ? "Create an account" : "Sign in"}</span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </>
+                )}
               </button>
             </form>
 
             <p className="cl-login04__or">
               <span>or continue with</span>
             </p>
+
             <div className="cl-login04__social">
               <button
                 className="cl-login04__icon-btn"
                 type="button"
                 aria-label="Continue with Google"
                 onClick={() => handleSocialAuth("Google")}
+                title="Sign in with Google OAuth"
               >
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
@@ -290,6 +350,7 @@ export default function Login() {
                 type="button"
                 aria-label="Continue with Apple"
                 onClick={() => handleSocialAuth("Apple")}
+                title="Sign in with Apple"
               >
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
                   <rect x="6" y="2.5" width="12" height="19" rx="3" />
@@ -301,6 +362,7 @@ export default function Login() {
                 type="button"
                 aria-label="Continue with GitHub"
                 onClick={() => handleSocialAuth("GitHub")}
+                title="Sign in with GitHub OAuth"
               >
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 19c-4 0-7-2.7-7-6.5S8.5 5 12.5 5 19 7.5 19 10.5c0 2-1.5 3-3 3h-2a2 2 0 0 0-1.4 3.4c.8.8.4 2.1-.6 2.1Z" />
@@ -310,6 +372,38 @@ export default function Login() {
                 </svg>
               </button>
             </div>
+
+            {/* OAuth Info Modal */}
+            {oauthDialog && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  background: "rgba(30, 20, 60, 0.7)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  fontSize: "12px",
+                  lineHeight: "1.4",
+                }}
+              >
+                <p style={{ color: "#c4b5fd", marginBottom: "8px" }}>{oauthDialog}</p>
+                <button
+                  type="button"
+                  onClick={() => setOauthDialog(null)}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.15)",
+                    border: "none",
+                    color: "#fff",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
 
             <p className="cl-login04__foot">
               {mode === "signup" ? (
@@ -381,7 +475,7 @@ export default function Login() {
           </div>
         )}
 
-        <p className="cl-login04__demo">StudySpace &mdash; College Major Project Prototype</p>
+        <p className="cl-login04__demo">StudySpace &mdash; Secure Student Authentication & Database Profile</p>
       </section>
     </main>
   );

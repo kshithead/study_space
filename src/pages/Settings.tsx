@@ -2,6 +2,7 @@ import { Bell, Bot, Moon, Palette, Save, Target, UserRound } from "lucide-react"
 import { tutorModes, user as mockUser } from "@/data/mockData";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useAppState } from "@/store/appState";
+import { DEFAULT_NEUTRAL_AVATAR, updateUserProfile } from "@/services/auth";
 import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import {
@@ -52,7 +53,7 @@ function ToggleRow({ label, desc, checked, onChange, testId }: ToggleRowProps) {
 }
 
 export default function Settings() {
-  const { user: currentUser, updateUser } = useAppState();
+  const { user: currentUser, updateUser, isAuthenticated } = useAppState();
   const user = currentUser ?? mockUser;
   const [userName, setUserName] = useState(user.name);
   const [userEmail, setUserEmail] = useState(user.email);
@@ -64,14 +65,24 @@ export default function Settings() {
   const [autoplay, setAutoplay] = usePersistentState("ss.settings.autoplay", true);
   const [reduceMotion, setReduceMotion] = usePersistentState("ss.settings.reduceMotion", false);
 
-  const saveAll = () => {
+  const saveAll = async () => {
     updateUser({
       name: userName,
       firstName: userName.split(" ")[0],
       email: userEmail,
     });
+
+    if (isAuthenticated) {
+      try {
+        const updated = await updateUserProfile({ fullName: userName });
+        updateUser(updated);
+      } catch (err: any) {
+        console.error("Failed to sync settings to database:", err);
+      }
+    }
+
     toast.success("Settings & Profile saved", {
-      description: "Your updated profile preferences have been saved.",
+      description: "Your updated profile preferences have been saved to your account.",
     });
   };
 
@@ -89,9 +100,12 @@ export default function Settings() {
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
           <img
-            src={user.avatar}
-            alt={user.name}
-            className="size-20 rounded-2xl object-cover"
+            src={user.avatar || DEFAULT_NEUTRAL_AVATAR}
+            alt={user.name || "Student"}
+            onError={(e) => {
+              e.currentTarget.src = DEFAULT_NEUTRAL_AVATAR;
+            }}
+            className="size-20 rounded-2xl object-cover bg-[#18152e] border border-white/10"
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">

@@ -54,7 +54,7 @@ export default function Profile() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  // Load fresh profile from database on mount
+  // Load fresh profile from database on mount (once)
   useEffect(() => {
     let isMounted = true;
     async function loadFresh() {
@@ -64,9 +64,6 @@ export default function Profile() {
         const fresh = await fetchCurrentUser();
         if (fresh && isMounted) {
           updateUser(fresh);
-          setEditName(fresh.name || "");
-          setEditBio(fresh.bio || "");
-          setEditTrack(fresh.learningTrack || "General Studies");
         }
       } catch (err) {
         console.error("Failed to refresh profile from database:", err);
@@ -78,7 +75,8 @@ export default function Profile() {
     return () => {
       isMounted = false;
     };
-  }, [isAuthenticated, updateUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Keep edit state in sync with user
   useEffect(() => {
@@ -87,7 +85,7 @@ export default function Profile() {
       setEditBio(user.bio || "");
       setEditTrack(user.learningTrack || "General Studies");
     }
-  }, [user, isEditing]);
+  }, [user.name, user.bio, user.learningTrack, isEditing]);
 
   // Safe calculated statistics
   const enrolled = allCourses.filter((c) => c.enrolled);

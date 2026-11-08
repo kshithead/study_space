@@ -58,6 +58,7 @@ export function normalizeUser(u: any): UserProfile {
     levelName: u.levelName || u.level_name || "Explorer",
     xp: typeof u.xp === "number" ? u.xp : 150,
     xpToNext: typeof u.xpToNext === "number" ? u.xpToNext : 1000,
+    weeklyGoalHours: typeof u.weeklyGoalHours === "number" ? u.weeklyGoalHours : 6,
     hoursThisWeek: typeof u.hoursThisWeek === "number" ? u.hoursThisWeek : 2.5,
     joined: u.joined || "November 2026",
     interests: Array.isArray(u.interests) && u.interests.length > 0 ? u.interests : [u.learningTrack || "General Studies", "Learning Science"],
@@ -197,11 +198,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     (profile: Partial<UserProfile>) => {
-      const norm = normalizeUser({ ...user, ...profile });
-      setUserState(norm);
-      setStoredUser(norm);
+      setUserState((prev) => {
+        const norm = normalizeUser({ ...prev, ...profile });
+        setStoredUser(norm);
+        return norm;
+      });
     },
-    [user, setStoredUser],
+    [setStoredUser],
   );
 
   const logout = useCallback(() => {
@@ -213,11 +216,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const updateUser = useCallback(
     (updates: Partial<UserProfile>) => {
-      const norm = normalizeUser({ ...user, ...updates });
-      setUserState(norm);
-      setStoredUser(norm);
+      setUserState((prev) => {
+        const norm = normalizeUser({ ...prev, ...updates });
+        setStoredUser(norm);
+        return norm;
+      });
     },
-    [user, setStoredUser],
+    [setStoredUser],
   );
 
   const toggleSidebar = useCallback(

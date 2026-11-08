@@ -1,4 +1,6 @@
 // Authentication & Persistent Database Service for StudySpace
+import { supabase, isSupabaseConfigured, uploadPdfToSupabase } from "@/lib/supabase";
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -61,10 +63,35 @@ export const authStorage = {
   },
 };
 
-// ── Persistent Browser Database Fallback Layer ─────────────────────────────────
-// Ensures 100% functionality on hosted static deployments (Vercel) or when
-// the local FastAPI backend is offline.
+// Map a Supabase PostgreSQL row into a UserProfile
+function mapSupabaseUser(row: any): UserProfile {
+  const name = row.full_name || "Student";
+  const firstName = name.split(" ")[0] || "Student";
+  return {
+    id: row.id,
+    email: row.email,
+    name,
+    firstName,
+    avatar: row.avatar || DEFAULT_NEUTRAL_AVATAR,
+    bio: row.bio || "",
+    learningTrack: row.learning_track || "General Studies",
+    handle: `@${firstName.toLowerCase()}.learns`,
+    streak: typeof row.streak === "number" ? row.streak : 1,
+    level: typeof row.level === "number" ? row.level : 1,
+    levelName: row.level_name || "Explorer",
+    xp: typeof row.xp === "number" ? row.xp : 150,
+    xpToNext: typeof row.xp_to_next === "number" ? row.xp_to_next : 1000,
+    weeklyGoalHours: Number(row.weekly_goal_hours || 6),
+    hoursThisWeek: Number(row.hours_this_week || 0),
+    joined: row.created_at
+      ? new Date(row.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      : "November 2026",
+    interests: [row.learning_track || "General Studies", "Learning Science"],
+    authProvider: row.auth_provider || "local",
+  };
+}
 
+// ── Persistent Browser Database Fallback Layer ─────────────────────────────────
 const SEED_ACCOUNTS: StoredAccount[] = [
   {
     id: "usr_demo_alex",
@@ -151,7 +178,7 @@ export async function registerUser(params: {
   const cleanName = params.fullName.trim();
   const apiBase = getApiBase();
 
-  // If backend endpoint is reachable, attempt backend registration first
+  // 1. If backend endpoint is reachable, attempt backend registration first
   if (apiBase) {
     try {
       const res = await fetchWithTimeout(`${apiBase}/api/auth/register`, {
@@ -175,15 +202,68 @@ export async function registerUser(params: {
       authStorage.setToken(token);
       return { token, user: data.user };
     } catch (err: any) {
-      // If the backend explicitly returned a 4xx validation error, rethrow it
       if (err.message && !err.message.includes("fetch") && !err.message.includes("abort")) {
         throw err;
       }
-      console.warn("Backend API unreachable, activating persistent client database:", err);
+      console.warn("Backend API unreachable, checking Supabase / local DB:", err);
     }
   }
 
-  // Persistent Client-Side Database Fallback
+  // 2. If Supabase PostgreSQL is configured, register directly in Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: existing } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", cleanEmail)
+        .maybeSingle();
+
+      if (existing) {
+        throw new Error("An account with this email address already exists. Please sign in instead.");
+      }
+
+      const userId = `usr_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+      const { data: inserted, error: insErr } = await supabase
+        .from("users")
+        .insert({
+          id: userId,
+          email: cleanEmail,
+          password_hash: params.password,
+          full_name: cleanName,
+          avatar: params.avatar || DEFAULT_NEUTRAL_AVATAR,
+          learning_track: params.learningTrack || "General Studies",
+          bio: `Enrolled in ${params.learningTrack || "General Studies"}.`,
+          streak: 1,
+          level: 1,
+          level_name: "Explorer",
+          xp: 150,
+          xp_to_next: 1000,
+          weekly_goal_hours: 6,
+          hours_this_week: 0,
+        })
+        .select()
+        .single();
+
+      if (insErr) {
+        throw new Error(insErr.message);
+      }
+
+      const token = `sb_auth_${userId}`;
+      authStorage.setToken(token);
+
+      return {
+        token,
+        user: mapSupabaseUser(inserted),
+      };
+    } catch (sbErr: any) {
+      if (sbErr.message && !sbErr.message.includes("fetch")) {
+        throw sbErr;
+      }
+      console.warn("Supabase query failed, falling back to local DB:", sbErr);
+    }
+  }
+
+  // 3. Persistent Client-Side Database Fallback
   const accounts = getStoredAccounts();
   const existing = accounts.find((a) => a.email.toLowerCase() === cleanEmail);
   if (existing) {
@@ -235,6 +315,7 @@ export async function loginUser(params: {
   const cleanEmail = params.email.trim().toLowerCase();
   const apiBase = getApiBase();
 
+  // 1. Backend Login
   if (apiBase) {
     try {
       const res = await fetchWithTimeout(`${apiBase}/api/auth/login`, {
@@ -258,11 +339,39 @@ export async function loginUser(params: {
       if (err.message && !err.message.includes("fetch") && !err.message.includes("abort")) {
         throw err;
       }
-      console.warn("Backend API unreachable, checking persistent database:", err);
+      console.warn("Backend API unreachable, checking Supabase / local DB:", err);
     }
   }
 
-  // Persistent Client-Side Database Fallback
+  // 2. Supabase PostgreSQL Login
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", cleanEmail)
+        .maybeSingle();
+
+      if (!userRow || userRow.password_hash !== params.password) {
+        throw new Error("Invalid email or password. Please check your credentials.");
+      }
+
+      const token = `sb_auth_${userRow.id}`;
+      authStorage.setToken(token);
+
+      return {
+        token,
+        user: mapSupabaseUser(userRow),
+      };
+    } catch (sbErr: any) {
+      if (sbErr.message && !sbErr.message.includes("fetch")) {
+        throw sbErr;
+      }
+      console.warn("Supabase query failed, checking local database:", sbErr);
+    }
+  }
+
+  // 3. Persistent Client-Side Database Fallback
   const accounts = getStoredAccounts();
   const account = accounts.find((a) => a.email.toLowerCase() === cleanEmail);
 
@@ -284,7 +393,22 @@ export async function fetchCurrentUser(): Promise<UserProfile | null> {
   const token = authStorage.getToken();
   if (!token) return null;
 
-  // If local token, retrieve immediately from local database
+  // Supabase session
+  if (token.startsWith("sb_auth_") && isSupabaseConfigured && supabase) {
+    try {
+      const userId = token.replace("sb_auth_", "");
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+      if (userRow) return mapSupabaseUser(userRow);
+    } catch {
+      // Fallback
+    }
+  }
+
+  // Local persistent DB session
   if (token.startsWith("local_auth_")) {
     const userId = token.replace("local_auth_", "");
     const accounts = getStoredAccounts();
@@ -328,9 +452,33 @@ export async function updateUserProfile(params: {
   const token = authStorage.getToken();
   if (!token) throw new Error("Authentication required.");
 
-  const apiBase = getApiBase();
+  // Supabase update
+  if (token.startsWith("sb_auth_") && isSupabaseConfigured && supabase) {
+    try {
+      const userId = token.replace("sb_auth_", "");
+      const updates: any = {};
+      if (params.fullName) updates.full_name = params.fullName.trim();
+      if (params.avatar !== undefined) updates.avatar = params.avatar;
+      if (params.bio !== undefined) updates.bio = params.bio;
+      if (params.learningTrack !== undefined) updates.learning_track = params.learningTrack;
 
-  if (apiBase && !token.startsWith("local_auth_")) {
+      const { data, error } = await supabase
+        .from("users")
+        .update(updates)
+        .eq("id", userId)
+        .select()
+        .single();
+
+      if (!error && data) {
+        return mapSupabaseUser(data);
+      }
+    } catch (e) {
+      console.warn("Supabase profile update warning:", e);
+    }
+  }
+
+  const apiBase = getApiBase();
+  if (apiBase && !token.startsWith("local_auth_") && !token.startsWith("sb_auth_")) {
     try {
       const res = await fetchWithTimeout(`${apiBase}/api/auth/profile`, {
         method: "PUT",
@@ -361,7 +509,7 @@ export async function updateUserProfile(params: {
 
   // Persistent Client-Side Database Fallback
   const accounts = getStoredAccounts();
-  const userId = token.startsWith("local_auth_") ? token.replace("local_auth_", "") : "";
+  const userId = token.replace(/^(local_auth_|sb_auth_)/, "");
   let account = accounts.find((a) => a.id === userId) || accounts[0];
 
   if (!account) {
@@ -391,35 +539,28 @@ export async function uploadUserAvatar(file: File): Promise<UserProfile> {
   const token = authStorage.getToken();
   if (!token) throw new Error("Authentication required.");
 
-  const apiBase = getApiBase();
-
-  if (apiBase && !token.startsWith("local_auth_")) {
+  // If Supabase is configured, upload avatar to Supabase Storage
+  if (isSupabaseConfigured && supabase) {
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetchWithTimeout(`${apiBase}/api/auth/avatar/upload`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+      const ext = file.name.split(".").pop() || "png";
+      const filePath = `avatars/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("study-materials").upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: true,
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail || "Failed to upload avatar.");
+      if (!upErr) {
+        const { data: pubData } = supabase.storage.from("study-materials").getPublicUrl(filePath);
+        if (pubData?.publicUrl) {
+          return await updateUserProfile({ avatar: pubData.publicUrl });
+        }
       }
-
-      return data.user;
-    } catch (err: any) {
-      if (err.message && !err.message.includes("fetch") && !err.message.includes("abort")) {
-        throw err;
-      }
+    } catch (e) {
+      console.warn("Supabase avatar upload warning:", e);
     }
   }
 
-  // Persistent Client-Side Database Fallback (Base64 Data URI)
+  // Fallback to Base64 Data URI
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = async () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { BookOpen, Download, FileText, ScrollText, Sheet, Sparkles, Upload, Loader2 } from "lucide-react";
+import { BookOpen, Download, FileText, ScrollText, Sheet, Sparkles, Upload, Loader2, Cloud } from "lucide-react";
 import { materialTypeLabels, materials as mockMaterials } from "@/data/mockData";
 import type { Material, MaterialType } from "@/data/mockData";
 import { EmptyState, PageHeader } from "@/components/shared";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { isSupabaseConfigured, uploadPdfToSupabase } from "@/lib/supabase";
 
 const typeIcons: Record<MaterialType, typeof FileText> = {
   summary: Sparkles,
@@ -70,38 +71,66 @@ export default function StudyMaterials() {
     }
 
     setIsUploading(true);
-    toast.loading("Parsing & indexing PDF with RAG...", { id: "upload-toast" });
+    toast.loading("Processing & uploading PDF...", { id: "upload-toast" });
 
     try {
+      let cloudUrl: string | null = null;
+
+      // 1. If Supabase is configured, upload to Supabase Storage bucket
+      if (isSupabaseConfigured) {
+        try {
+          const sRes = await uploadPdfToSupabase(file);
+          cloudUrl = sRes.url;
+        } catch (sErr: any) {
+          console.warn("Supabase Storage upload warning:", sErr);
+        }
+      }
+
+      // 2. Submit to FastAPI backend for PyPDF extraction & ChromaDB RAG vectorization
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", file.name.replace(/\.[^/.]+$/, ""));
       formData.append("course", "Academic Study Material");
 
       const apiBase = getApiBase();
-      const res = await fetch(`${apiBase}/api/documents/upload`, {
-        method: "POST",
-        body: formData,
-      });
+      let indexed = false;
+      if (apiBase || window.location.protocol !== "https:") {
+        try {
+          const res = await fetch(`${apiBase}/api/documents/upload`, {
+            method: "POST",
+            body: formData,
+          });
+          if (res.ok) {
+            indexed = true;
+            const result = await res.json();
+            toast.success(`Indexed "${file.name}"!`, {
+              id: "upload-toast",
+              description: `${result.total_pages} pages processed (${result.chunks_indexed} semantic chunks).${cloudUrl ? " Saved to Supabase Cloud." : ""}`,
+            });
+            fetchDocs();
+          }
+        } catch {
+          // Backend offline or unreachable
+        }
+      }
 
-      if (res.ok) {
-        const result = await res.json();
-        toast.success(`Indexed "${file.name}"!`, {
-          id: "upload-toast",
-          description: `${result.total_pages} pages processed (${result.chunks_indexed} semantic chunks).`,
-        });
-        fetchDocs();
-      } else {
-        const err = await res.json();
-        toast.error("Upload failed", {
-          id: "upload-toast",
-          description: err.detail || "Server error",
-        });
+      if (!indexed) {
+        if (cloudUrl) {
+          toast.success(`Saved "${file.name}" to Supabase!`, {
+            id: "upload-toast",
+            description: "PDF safely uploaded to Supabase Storage bucket.",
+          });
+        } else {
+          toast.info(`Received "${file.name}"`, {
+            id: "upload-toast",
+            description: "Connect Supabase or start the FastAPI backend to store and index PDFs.",
+          });
+        }
       }
     } catch (err: any) {
-      toast.error("Could not reach backend", {
+      toast.error("Upload failed", {
         id: "upload-toast",
-        description: "Ensure the FastAPI server is running on port 8000.",
+        description: err.message || "An unexpected error occurred.",
       });
     } finally {
       setIsUploading(false);

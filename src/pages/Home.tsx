@@ -6,10 +6,12 @@ import {
   Flame,
   Layers,
   ListChecks,
+  Play,
   PlayCircle,
   Route,
   Sparkles,
   TrendingUp,
+  Tv,
   Zap,
 } from "lucide-react";
 import {
@@ -133,7 +135,45 @@ export default function Home() {
               </div>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div
+            data-testid="starter-course-banner"
+            className="group relative overflow-hidden rounded-3xl border border-violet-500/30 bg-gradient-to-br from-[#1d1933] via-[#141320] to-[#0f0f12] p-6 sm:p-7 animate-fade-up-1 shadow-xl flex flex-col justify-between"
+          >
+            <div className="absolute -right-10 -top-10 size-60 rounded-full bg-violet-600/15 blur-3xl pointer-events-none" />
+            <div>
+              <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white shadow-md">
+                <Sparkles className="size-3.5" /> Featured Course to Watch
+              </span>
+              <h2 className="max-w-lg font-heading text-2xl font-bold leading-snug text-white sm:text-3xl">
+                {allCourses[0]?.title || "Python for Machine Learning"}
+              </h2>
+              <p className="mt-2 max-w-md text-sm text-zinc-300 line-clamp-2">
+                {allCourses[0]?.description || "Comprehensive hands-on curriculum with curated video lectures, real projects, and instant AI tutor guidance."}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span className="rounded-full bg-white/5 px-2.5 py-1 text-zinc-300">12 Video Lessons</span>
+                <span className="rounded-full bg-white/5 px-2.5 py-1 text-zinc-300">Full HD YouTube Playlist</span>
+                <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-400 font-medium">Ready to Watch</span>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                to={`/course/${allCourses[0]?.id || "c-python"}`}
+                data-testid="start-course-hero-button"
+                className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-blue-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_8px_30px_rgba(124,58,237,0.4)] transition-all hover:scale-105 active:scale-95"
+              >
+                <Play className="size-4 fill-current" /> Select & Start Watching
+              </Link>
+              <Link
+                to="/explore"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-semibold text-zinc-200 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Browse All {allCourses.length} Courses <ArrowRight className="size-3.5" />
+              </Link>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-3xl border border-violet-600/25 bg-gradient-to-b from-[#1a1826] to-[#151419] p-5 animate-fade-up-2">
           <div className="mb-3 flex items-center gap-2">
@@ -191,20 +231,39 @@ export default function Home() {
         </div>
       </section>
 
-      {/* continue learning */}
+      {/* continue learning or select course */}
       <section>
-        <SectionHeader
-          title="Continue learning"
-          subtitle="Pick up exactly where you left off"
-          icon={<PlayCircle className="size-5" />}
-          actionLabel="My Learning"
-          actionTo="/my-learning"
-        />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {inProgress.slice(0, 3).map((c) => (
-            <CourseCard key={c.id} course={c} showProgress />
-          ))}
-        </div>
+        {inProgress.length > 0 ? (
+          <>
+            <SectionHeader
+              title="Continue learning"
+              subtitle="Pick up exactly where you left off"
+              icon={<PlayCircle className="size-5 text-violet-400" />}
+              actionLabel="My Learning"
+              actionTo="/my-learning"
+            />
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {inProgress.slice(0, 3).map((c) => (
+                <CourseCard key={c.id} course={c} showProgress />
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <SectionHeader
+              title="Select a Course to Watch"
+              subtitle="Choose any curated video lecture series below to start watching and add to My Learning"
+              icon={<Tv className="size-5 text-violet-400" />}
+              actionLabel="Browse all courses"
+              actionTo="/explore"
+            />
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {allCourses.slice(0, 6).map((c) => (
+                <CourseCard key={c.id} course={c} />
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       {/* recommended */}

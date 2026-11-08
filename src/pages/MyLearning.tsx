@@ -38,12 +38,32 @@ export default function MyLearning() {
 
         <TabsContent value="progress" className="mt-4">
           {inProgress.length === 0 ? (
-            <EmptyState
-              testId="my-learning-empty-progress"
-              icon={<GraduationCap className="size-6" />}
-              title="Nothing in progress"
-              body="Enroll in any course from Explore and it will appear here with live progress."
-            />
+            <div className="space-y-6">
+              <EmptyState
+                testId="my-learning-empty-progress"
+                icon={<GraduationCap className="size-6" />}
+                title="No courses in progress"
+                body="Choose any course below to begin watching lectures and track your progress here."
+              >
+                <Link
+                  to="/explore"
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  Browse all courses
+                </Link>
+              </EmptyState>
+
+              <div>
+                <h3 className="font-heading text-sm font-semibold text-zinc-200 mb-3">
+                  Recommended Courses to Start Watching
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {allCourses.slice(0, 3).map((c) => (
+                    <CourseCard key={c.id} course={c} />
+                  ))}
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="space-y-3">
               {inProgress.map((c) => (

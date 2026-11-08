@@ -57,9 +57,9 @@ export default function Explore() {
   return (
     <div className="space-y-5">
       <div className="animate-fade-up">
-        <h1 className="text-2xl font-bold sm:text-3xl">Explore</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl">Course Catalog & Video Lectures</h1>
         <p className="mt-1 text-sm text-muted-foreground sm:text-base">
-          {results.length} course{results.length === 1 ? "" : "s"}
+          {results.length} course{results.length === 1 ? "" : "s"} ready to watch &bull; Select any course to begin watching lectures and track progress in My Learning
           {q.trim() ? (
             <>
               {" "}for “<span className="text-violet-300">{q.trim()}</span>”

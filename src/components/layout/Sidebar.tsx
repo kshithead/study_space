@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   BarChart3,
   Bookmark,
+  BookOpen,
   Bot,
   Compass,
   FileText,
@@ -36,7 +37,7 @@ export const navGroups: NavGroup[] = [
     title: "Discover",
     items: [
       { id: "home", label: "Home", to: "/", icon: Home },
-      { id: "explore", label: "Explore", to: "/explore", icon: Compass },
+      { id: "explore", label: "Courses", to: "/explore", icon: BookOpen },
     ],
   },
   {

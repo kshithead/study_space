@@ -96,7 +96,16 @@ export function CourseCard({
               {progress}%
             </span>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-1.5 flex items-center justify-between border-t border-white/5 pt-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-violet-400 group-hover:text-violet-300">
+              <Play className="size-3 fill-current" /> Watch Lectures
+            </span>
+            <span className="text-[11px] text-zinc-500 group-hover:text-zinc-300 transition-colors">
+              Add to My Learning &rarr;
+            </span>
+          </div>
+        )}
       </div>
     </Link>
   );

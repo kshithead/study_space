@@ -51,3 +51,73 @@ export async function uploadPdfToSupabase(file: File, userEmail?: string): Promi
   };
 }
 
+export interface SupabasePdfDoc {
+  id: string;
+  name: string;
+  title: string;
+  url: string;
+  createdAt: string;
+  size?: number;
+}
+
+/**
+ * List all uploaded PDFs from Supabase Storage bucket 'study-materials'
+ */
+export async function listPdfsFromSupabase(userEmail?: string): Promise<SupabasePdfDoc[]> {
+  if (!supabase) return [];
+
+  const folders = ["general"];
+  if (userEmail) {
+    const userFolder = userEmail.replace(/[^a-zA-Z0-9]/g, "_");
+    if (!folders.includes(userFolder)) {
+      folders.unshift(userFolder);
+    }
+  }
+
+  const allFiles: SupabasePdfDoc[] = [];
+  const seenNames = new Set<string>();
+
+  for (const folder of folders) {
+    try {
+      const { data, error } = await supabase.storage
+        .from("study-materials")
+        .list(folder, {
+          limit: 100,
+          sortBy: { column: "created_at", order: "desc" },
+        });
+
+      if (error || !data) continue;
+
+      for (const item of data) {
+        if (!item.name || item.name.startsWith(".")) continue;
+        if (seenNames.has(item.name)) continue;
+        seenNames.add(item.name);
+
+        const filePath = `${folder}/${item.name}`;
+        const { data: pubData } = supabase.storage
+          .from("study-materials")
+          .getPublicUrl(filePath);
+
+        // Format clean title from timestamp prefix and underscores
+        const cleanTitle = item.name
+          .replace(/^\d+_/, "")
+          .replace(/\.pdf$/i, "")
+          .replace(/_/g, " ");
+
+        allFiles.push({
+          id: item.id || item.name,
+          name: item.name,
+          title: cleanTitle,
+          url: pubData.publicUrl,
+          createdAt: item.created_at || new Date().toISOString(),
+          size: item.metadata?.size,
+        });
+      }
+    } catch (e) {
+      console.warn(`Error listing Supabase PDFs for folder ${folder}:`, e);
+    }
+  }
+
+  return allFiles;
+}
+

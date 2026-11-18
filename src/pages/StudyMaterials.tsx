@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef } from "react";
-import { BookOpen, Download, FileText, ScrollText, Sheet, Sparkles, Upload, Loader2, Cloud } from "lucide-react";
+import {
+  BookOpen,
+  Download,
+  FileText,
+  ScrollText,
+  Sheet,
+  Sparkles,
+  Upload,
+  Loader2,
+  Cloud,
+  ExternalLink,
+} from "lucide-react";
 import { materialTypeLabels, materials as mockMaterials } from "@/data/mockData";
 import type { Material, MaterialType } from "@/data/mockData";
 import { EmptyState, PageHeader } from "@/components/shared";
@@ -12,7 +23,13 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { isSupabaseConfigured, uploadPdfToSupabase } from "@/lib/supabase";
+import { isSupabaseConfigured, uploadPdfToSupabase, listPdfsFromSupabase } from "@/lib/supabase";
+import { useAppState } from "@/store/appState";
+
+export interface DisplayMaterial extends Material {
+  url?: string;
+  isUploaded?: boolean;
+}
 
 const typeIcons: Record<MaterialType, typeof FileText> = {
   summary: Sparkles,
@@ -21,17 +38,10 @@ const typeIcons: Record<MaterialType, typeof FileText> = {
   transcript: ScrollText,
 };
 
-const filters: Array<{ id: MaterialType | "all"; label: string }> = [
-  { id: "all", label: "All materials" },
-  { id: "summary", label: "AI summaries" },
-  { id: "cheatsheet", label: "Cheat sheets" },
-  { id: "notes", label: "Smart notes" },
-  { id: "transcript", label: "Transcripts" },
-];
-
 export default function StudyMaterials() {
-  const [filter, setFilter] = useState<MaterialType | "all">("all");
-  const [preview, setPreview] = useState<Material | null>(null);
+  const { user } = useAppState();
+  const [filter, setFilter] = useState<MaterialType | "all" | "uploads">("all");
+  const [preview, setPreview] = useState<DisplayMaterial | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,24 +52,61 @@ export default function StudyMaterials() {
       ? ""
       : "http://127.0.0.1:8000");
 
-  // Fetch real uploaded documents from backend
+  // Fetch real uploaded documents from both Supabase Cloud Storage and local FastAPI
   const fetchDocs = async () => {
+    const docsMap = new Map<string, any>();
+
+    // 1. Fetch from Supabase Cloud Storage
+    if (isSupabaseConfigured) {
+      try {
+        const supaDocs = await listPdfsFromSupabase(user?.email);
+        for (const d of supaDocs) {
+          docsMap.set(d.name, {
+            id: d.id,
+            name: d.name,
+            title: d.title,
+            url: d.url,
+            created_at: d.createdAt,
+            size: d.size,
+            source: "supabase",
+          });
+        }
+      } catch (e) {
+        console.warn("Supabase documents list warning:", e);
+      }
+    }
+
+    // 2. Fetch from local backend (if active)
     try {
       const apiBase = getApiBase();
-      if (!apiBase && window.location.protocol === "https:") return;
-      const res = await fetch(`${apiBase}/api/documents`);
-      if (res.ok) {
-        const data = await res.json();
-        setUploadedDocs(data);
+      if (apiBase || (typeof window !== "undefined" && window.location.protocol !== "https:")) {
+        const res = await fetch(`${apiBase}/api/documents`);
+        if (res.ok) {
+          const backendDocs = await res.json();
+          for (const b of backendDocs) {
+            const key = b.filename || b.doc_id;
+            const existing = docsMap.get(key);
+            docsMap.set(key, {
+              ...existing,
+              ...b,
+              id: b.doc_id || existing?.id,
+              name: b.filename || existing?.name,
+              title: b.title || existing?.title,
+              source: existing ? "both" : "backend",
+            });
+          }
+        }
       }
-    } catch (e) {
-      // Backend not running or offline
+    } catch {
+      // Backend offline or unreachable
     }
+
+    setUploadedDocs(Array.from(docsMap.values()));
   };
 
   useEffect(() => {
     fetchDocs();
-  }, []);
+  }, [user?.email]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -76,17 +123,17 @@ export default function StudyMaterials() {
     try {
       let cloudUrl: string | null = null;
 
-      // 1. If Supabase is configured, upload to Supabase Storage bucket
+      // 1. Upload to Supabase Storage bucket
       if (isSupabaseConfigured) {
         try {
-          const sRes = await uploadPdfToSupabase(file);
+          const sRes = await uploadPdfToSupabase(file, user?.email);
           cloudUrl = sRes.url;
         } catch (sErr: any) {
           console.warn("Supabase Storage upload warning:", sErr);
         }
       }
 
-      // 2. Submit to FastAPI backend for PyPDF extraction & ChromaDB RAG vectorization
+      // 2. Submit to FastAPI backend for PyPDF extraction & ChromaDB vectorization
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", file.name.replace(/\.[^/.]+$/, ""));
@@ -94,7 +141,7 @@ export default function StudyMaterials() {
 
       const apiBase = getApiBase();
       let indexed = false;
-      if (apiBase || window.location.protocol !== "https:") {
+      if (apiBase || (typeof window !== "undefined" && window.location.protocol !== "https:")) {
         try {
           const res = await fetch(`${apiBase}/api/documents/upload`, {
             method: "POST",
@@ -105,9 +152,8 @@ export default function StudyMaterials() {
             const result = await res.json();
             toast.success(`Indexed "${file.name}"!`, {
               id: "upload-toast",
-              description: `${result.total_pages} pages processed (${result.chunks_indexed} semantic chunks).${cloudUrl ? " Saved to Supabase Cloud." : ""}`,
+              description: `${result.total_pages} pages processed (${result.chunks_indexed} semantic chunks). Saved to Cloud.`,
             });
-            fetchDocs();
           }
         } catch {
           // Backend offline or unreachable
@@ -116,17 +162,20 @@ export default function StudyMaterials() {
 
       if (!indexed) {
         if (cloudUrl) {
-          toast.success(`Saved "${file.name}" to Supabase!`, {
+          toast.success(`Saved "${file.name}" to Cloud!`, {
             id: "upload-toast",
             description: "PDF safely uploaded to Supabase Storage bucket.",
           });
         } else {
           toast.info(`Received "${file.name}"`, {
             id: "upload-toast",
-            description: "Connect Supabase or start the FastAPI backend to store and index PDFs.",
+            description: "PDF uploaded.",
           });
         }
       }
+
+      // Immediately refresh documents list
+      await fetchDocs();
     } catch (err: any) {
       toast.error("Upload failed", {
         id: "upload-toast",
@@ -138,24 +187,44 @@ export default function StudyMaterials() {
     }
   };
 
-  // Convert real uploaded backend docs into material card format
-  const realMaterials: Material[] = uploadedDocs.map((doc) => ({
-    id: doc.doc_id,
-    course: doc.course || "General",
-    courseId: doc.doc_id,
-    title: doc.title || doc.filename,
-    type: "notes",
-    readTime: `${doc.chunks || 1} chunks`,
-    updated: "Just now",
-    excerpt: `Indexed PDF document ready for RAG study chat, flashcards, and quizzes.`,
-    body: [
-      `This document (${doc.filename}) has been vectorized and stored in ChromaDB.`,
-      `You can now open the AI Tutor to ask questions grounded directly in this material with page citations.`
-    ]
-  }));
+  // Convert uploaded documents into material card format
+  const realMaterials: DisplayMaterial[] = uploadedDocs.map((doc) => {
+    const sizeStr = doc.size ? `${Math.round(doc.size / 1024)} KB` : doc.chunks ? `${doc.chunks} chunks` : "PDF document";
+    return {
+      id: doc.id || doc.doc_id || doc.name,
+      course: doc.course || "Uploaded Notes",
+      courseId: doc.doc_id || "custom-upload",
+      title: doc.title || doc.filename || doc.name,
+      type: "notes",
+      readTime: sizeStr,
+      updated: doc.created_at ? new Date(doc.created_at).toLocaleDateString() : "Cloud Synced",
+      excerpt: "Your personal uploaded study document. View the PDF, download, or study with the AI Tutor.",
+      body: [
+        `Document Name: ${doc.name || doc.filename || doc.title}`,
+        doc.url ? `Hosted securely in Supabase Cloud Storage.` : `Stored in local StudySpace backend.`,
+        "You can read the full PDF directly in your browser or ask the AI Tutor questions grounded in this material."
+      ],
+      url: doc.url,
+      isUploaded: true,
+    };
+  });
 
-  const allItems = [...realMaterials, ...mockMaterials];
-  const list = allItems.filter((m) => filter === "all" || m.type === filter);
+  const allItems: DisplayMaterial[] = [...realMaterials, ...mockMaterials];
+
+  const filters: Array<{ id: MaterialType | "all" | "uploads"; label: string }> = [
+    { id: "all", label: "All materials" },
+    { id: "uploads", label: `My Uploads (${realMaterials.length})` },
+    { id: "summary", label: "AI summaries" },
+    { id: "cheatsheet", label: "Cheat sheets" },
+    { id: "notes", label: "Smart notes" },
+    { id: "transcript", label: "Transcripts" },
+  ];
+
+  const list = allItems.filter((m) => {
+    if (filter === "all") return true;
+    if (filter === "uploads") return m.isUploaded;
+    return m.type === filter;
+  });
 
   return (
     <div className="space-y-5">
@@ -211,25 +280,44 @@ export default function StudyMaterials() {
         <EmptyState
           testId="materials-empty"
           icon={<FileText className="size-6" />}
-          title="No materials in this category"
-          body="Generate summaries from any lesson with the AI actions on the course page."
+          title="No materials found"
+          body={filter === "uploads" ? "You haven't uploaded any PDF notes yet. Click 'Upload Notes (PDF)' above!" : "Try selecting another filter or upload your own notes."}
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((m) => {
-            const Icon = typeIcons[m.type];
+            const Icon = typeIcons[m.type as MaterialType] || FileText;
             return (
               <div
                 key={m.id}
                 data-testid={`material-card-${m.id}`}
-                className="group flex flex-col rounded-2xl border border-[#27272a] bg-card p-5 transition-all hover:-translate-y-1 hover:border-violet-600/50"
+                className={cn(
+                  "group flex flex-col rounded-2xl border bg-card p-5 transition-all hover:-translate-y-1",
+                  m.isUploaded
+                    ? "border-emerald-500/40 hover:border-emerald-500/80 shadow-[0_0_20px_rgba(16,185,129,0.06)]"
+                    : "border-[#27272a] hover:border-violet-600/50"
+                )}
               >
                 <div className="flex items-center justify-between">
-                  <span className="flex size-10 items-center justify-center rounded-xl bg-[#1f1d2b] text-violet-400">
-                    <Icon className="size-5" />
+                  <span
+                    className={cn(
+                      "flex size-10 items-center justify-center rounded-xl",
+                      m.isUploaded
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-[#1f1d2b] text-violet-400"
+                    )}
+                  >
+                    {m.isUploaded ? <Cloud className="size-5" /> : <Icon className="size-5" />}
                   </span>
-                  <span className="rounded-full bg-[#232326] px-2.5 py-1 text-[11px] font-semibold text-zinc-300">
-                    {materialTypeLabels[m.type]}
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      m.isUploaded
+                        ? "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                        : "bg-[#232326] text-zinc-300"
+                    )}
+                  >
+                    {m.isUploaded ? "Uploaded PDF" : materialTypeLabels[m.type as MaterialType] || "Notes"}
                   </span>
                 </div>
                 <h3 className="mt-3 font-heading line-clamp-2 text-[15px] font-semibold leading-snug">
@@ -247,7 +335,12 @@ export default function StudyMaterials() {
                     type="button"
                     data-testid={`material-open-${m.id}`}
                     onClick={() => setPreview(m)}
-                    className="flex-1 rounded-full border border-violet-600/50 bg-[#1f1d2b] px-3 py-2 text-xs font-semibold text-violet-200 transition-all hover:bg-[#262239] active:scale-95"
+                    className={cn(
+                      "flex-1 rounded-full border px-3 py-2 text-xs font-semibold transition-all active:scale-95",
+                      m.isUploaded
+                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                        : "border-violet-600/50 bg-[#1f1d2b] text-violet-200 hover:bg-[#262239]"
+                    )}
                   >
                     Read
                   </button>
@@ -255,12 +348,22 @@ export default function StudyMaterials() {
                     type="button"
                     data-testid={`material-download-${m.id}`}
                     aria-label={`Download ${m.title}`}
-                    onClick={() =>
-                      toast.info("Prototype preview", {
-                        description: "Exports arrive with the backend stage.",
-                      })
-                    }
-                    className="flex size-9 items-center justify-center rounded-full border border-[#2e2e33] text-zinc-300 transition-all hover:border-violet-600/50 hover:text-white active:scale-90"
+                    onClick={() => {
+                      if (m.url) {
+                        window.open(m.url, "_blank");
+                        toast.success(`Opening "${m.title}"...`);
+                      } else {
+                        toast.info("Sample Material", {
+                          description: "This is a preloaded sample document.",
+                        });
+                      }
+                    }}
+                    className={cn(
+                      "flex size-9 items-center justify-center rounded-full border text-zinc-300 transition-all hover:text-white active:scale-90",
+                      m.isUploaded
+                        ? "border-emerald-500/40 hover:border-emerald-400"
+                        : "border-[#2e2e33] hover:border-violet-600/50"
+                    )}
                   >
                     <Download className="size-4" />
                   </button>
@@ -272,23 +375,63 @@ export default function StudyMaterials() {
       )}
 
       <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto border-[#2e2e33] bg-[#181818] sm:max-w-lg">
+        <DialogContent className={cn(
+          "max-h-[90vh] overflow-y-auto border-[#2e2e33] bg-[#181818]",
+          preview?.url ? "sm:max-w-3xl" : "sm:max-w-lg"
+        )}>
           {preview ? (
             <>
               <DialogHeader>
-                <DialogTitle className="font-heading pr-6">{preview.title}</DialogTitle>
+                <DialogTitle className="font-heading pr-6 flex items-center justify-between gap-3">
+                  <span>{preview.title}</span>
+                  {preview.url && (
+                    <a
+                      href={preview.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 transition-colors"
+                    >
+                      <ExternalLink className="size-3.5" /> Open in New Tab
+                    </a>
+                  )}
+                </DialogTitle>
                 <DialogDescription>
-                  {materialTypeLabels[preview.type]} · {preview.course} · {preview.readTime}
+                  {preview.isUploaded ? "Uploaded PDF" : materialTypeLabels[preview.type as MaterialType]} · {preview.course} · {preview.readTime}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3 text-sm leading-relaxed text-zinc-300">
-                {preview.body.map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
-              </div>
-              <p className="text-[11px] text-zinc-600">
-                AI-generated sample content for the frontend prototype.
-              </p>
+
+              {preview.url ? (
+                <div className="space-y-3 pt-2">
+                  <div className="overflow-hidden rounded-xl border border-[#2e2e33] bg-[#0c0c0e]">
+                    <iframe
+                      src={preview.url}
+                      title={preview.title}
+                      className="h-[60vh] w-full"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[12px] text-zinc-400">
+                    <span>Cloud Synced PDF document</span>
+                    <a
+                      href={preview.url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      <Download className="size-3" /> Download original PDF
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm leading-relaxed text-zinc-300">
+                  {preview.body.map((p, i) => (
+                    <p key={i}>{p}</p>
+                  ))}
+                  <p className="text-[11px] text-zinc-600">
+                    AI-generated sample content for the frontend prototype.
+                  </p>
+                </div>
+              )}
             </>
           ) : null}
         </DialogContent>

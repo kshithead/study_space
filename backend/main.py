@@ -68,6 +68,7 @@ class ChatRequest(BaseModel):
     query: str
     doc_id: Optional[str] = None
     mode: Optional[str] = "auto"
+    history: Optional[List[Dict[str, Any]]] = None
 
 class RegisterRequest(BaseModel):
     email: str
@@ -434,7 +435,8 @@ async def study_chat(req: ChatRequest):
         query=req.query,
         context_passages=context_passages,
         sources=sources,
-        mode=req.mode or "auto"
+        mode=req.mode or "auto",
+        history=req.history
     )
 
 @app.get("/api/documents")

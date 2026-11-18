@@ -80,34 +80,73 @@ class HybridAIService:
         query: str,
         context_passages: List[str],
         sources: List[Dict[str, Any]],
-        mode: str = "auto"
+        mode: str = "auto",
+        history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
-        Handles both document-grounded queries AND normal conversation!
+        Handles document-grounded queries, persona modes, and conversational memory.
         """
         has_context = len(context_passages) > 0 and bool(sources)
 
+        history_text = ""
+        if history:
+            h_lines = []
+            for h in history[-6:]:
+                role = "Student" if h.get("role") in ("user", "student") else "Socrates (AI Tutor)"
+                content = h.get("content", "").strip()
+                if content:
+                    h_lines.append(f"{role}: {content}")
+            if h_lines:
+                history_text = "\nConversation Context:\n" + "\n".join(h_lines) + "\n"
+
+        # Persona instructions based on mode
+        mode_instruction = "Provide a balanced, clear, and encouraging educational response."
+        if mode == "socratic":
+            mode_instruction = (
+                "Adopt the classic Socratic method: do not just lecture or blurt out the answer. "
+                "Guide the student through thoughtful questions, intuitive prompts, and hints to help them discover the answer themselves."
+            )
+        elif mode == "exam":
+            mode_instruction = (
+                "Act as a university professor running an exam prep drill: highlight common traps, test the student with "
+                "high-yield conceptual questions, and provide clear scoring criteria and exam tips."
+            )
+        elif mode == "eli5":
+            mode_instruction = (
+                "Explain Like I'm 5: explain this concept using simple language, visual metaphors, and fun real-world everyday analogies. Avoid jargon."
+            )
+        elif mode == "deepdive":
+            mode_instruction = (
+                "Conduct a rigorous deep dive: provide architectural details, mathematical/algorithmic formulation, "
+                "trade-offs, edge cases, and clean, runnable code examples where applicable."
+            )
+
         if has_context:
             joined_context = "\n---\n".join(context_passages)
-            prompt = f"""You are Socrates, a friendly and encouraging AI Personal Learning Assistant.
-The student asked: "{query}"
+            prompt = f"""You are Socrates, a world-class AI Personal Learning Assistant.
+{mode_instruction}
+{history_text}
+Student's latest query: "{query}"
 
 Relevant excerpts from their uploaded study notes:
 {joined_context}
 
 Instructions:
-1. Answer their question clearly and engagingly.
-2. Ground your explanation primarily in their notes whenever relevant.
-3. If they are asking general questions or greeting you, respond warmly and naturally as an academic tutor.
+1. Answer their question engagingly, clearly, and conversationally.
+2. Ground your explanation primarily in their notes whenever relevant, citing key ideas.
+3. Use clean markdown formatting (bolding, lists, code fences where appropriate).
 """
         else:
-            prompt = f"""You are Socrates, a brilliant, friendly, and supportive AI Personal Learning Assistant.
-The student said/asked: "{query}"
+            prompt = f"""You are Socrates, a world-class, empathetic, and brilliant AI Personal Learning Assistant.
+{mode_instruction}
+{history_text}
+Student said/asked: "{query}"
 
 Instructions:
-1. Respond warmly and naturally to conversational remarks or greetings.
-2. If they are asking a general academic, science, or engineering question, answer it clearly with helpful examples or analogies.
-3. Mention that they can upload their course PDFs in the "Study Materials" tab anytime to have you tutor them directly from their own class notes!
+1. Answer naturally, intelligently, and conversationally — just like modern advanced AI models (ChatGPT, Claude, Gemini).
+2. For academic, engineering, science, or computer science queries, provide structured, illuminating explanations with intuitive examples and code if helpful.
+3. If they are making small talk or greeting you, respond warmly as their personal study companion.
+4. Use clean markdown formatting (bolding, bullet points, headers, code blocks).
 """
 
         gemini_key = os.getenv("GEMINI_API_KEY")

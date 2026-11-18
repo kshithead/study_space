@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bot, FileText, History, Plus, Send, Sparkles, Trash2, User } from "lucide-react";
+import { Bot, FileText, History, Plus, Send, Sparkles, Trash2, User, Zap } from "lucide-react";
 import {
   suggestedPrompts,
-  simulatedTutorResponse,
   tutorModes,
   user as mockUser,
 } from "@/data/mockData";
 import type { ChatSession, TutorMode } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
+import { generateTutorReply } from "@/services/ai";
 import {
   Select,
   SelectContent,
@@ -167,39 +167,34 @@ export default function AiTutor() {
       messages: [...base.messages, userMsg, tutorMsg],
     });
     setActiveId(sessionId);
-    setStreamText("Thinking and retrieving relevant notes...");
+    setStreamText("Thinking with Gemini AI...");
 
     try {
-      const apiBase =
-        import.meta.env.VITE_API_URL ||
-        (typeof window !== "undefined" && window.location.protocol === "https:"
-          ? ""
-          : "http://127.0.0.1:8000");
+      const result = await generateTutorReply({
+        query: text,
+        mode,
+        history: base.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          at: m.at,
+        })),
+      });
 
-      let response: Response | null = null;
-      if (apiBase || window.location.protocol !== "https:") {
-        response = await fetch(`${apiBase}/api/study/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: text }),
-        });
-      }
-      
-      let full = "";
-      if (response && response.ok) {
-        const data = await response.json();
-        full = data.answer || "No response received from tutor.";
-        if (data.sources && data.sources.length > 0) {
-          full += "\n\n**Sources & Citations:**\n" + data.sources.map((s: any) => `- ${s.title || s.filename} (Page ${s.page})`).join("\n");
-        }
-      } else {
-        full = simulatedTutorResponse(text);
+      let full = result.answer;
+      if (result.sources && result.sources.length > 0) {
+        full +=
+          "\n\n**Sources & Citations:**\n" +
+          result.sources
+            .map((s) => `- ${s.title || s.filename} (Page ${s.page})`)
+            .join("\n");
       }
 
+      // Smooth streaming typewriter output
       const words = full.split(" ");
       let i = 0;
       const timer = window.setInterval(() => {
-        i += 2;
+        i += 3;
         setStreamText(words.slice(0, i).join(" "));
         if (i >= words.length) {
           window.clearInterval(timer);
@@ -210,15 +205,14 @@ export default function AiTutor() {
           });
           setStreamText(null);
         }
-      }, streamInterval);
-
+      }, 35);
     } catch (err) {
-      console.warn("Backend unavailable, falling back to simulated prototype:", err);
-      const full = simulatedTutorResponse(text);
+      console.error("AI Tutor error:", err);
+      const fallbackMsg = "I encountered a momentary connection issue. Please try your message again!";
       upsertChatSession({
         ...base,
         updatedAt: Date.now(),
-        messages: [...base.messages, userMsg, { ...tutorMsg, content: full }],
+        messages: [...base.messages, userMsg, { ...tutorMsg, content: fallbackMsg }],
       });
       setStreamText(null);
     }
@@ -343,14 +337,14 @@ export default function AiTutor() {
               </SelectContent>
             </Select>
             <Select value={model} onValueChange={(v: string) => setModel(v)}>
-              <SelectTrigger data-testid="ai-tutor-model-select" size="sm" className="hidden w-40 border-[#2e2e33] bg-[#181818] text-xs sm:flex">
+              <SelectTrigger data-testid="ai-tutor-model-select" size="sm" className="hidden w-44 border-[#2e2e33] bg-[#181818] text-xs sm:flex">
                 <SelectValue>
-                  {(v: string | null) => (v === "research" ? "Deep Research (demo)" : "Studyspace Tutor")}
+                  {(v: string | null) => (v === "research" ? "Gemini 3.8 Flash (Deep)" : "Gemini 3.5 Flash")}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="border-[#2e2e33] bg-popover">
-                <SelectItem value="tutor">Studyspace Tutor</SelectItem>
-                <SelectItem value="research">Deep Research (demo)</SelectItem>
+                <SelectItem value="tutor">Gemini 3.5 Flash</SelectItem>
+                <SelectItem value="research">Gemini 3.8 Flash (Deep)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -367,8 +361,7 @@ export default function AiTutor() {
                 What shall we learn today, {user.firstName}?
               </h1>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                Ask anything, attach your notes, or start from one of the suggestions.
-                This is the frontend prototype — responses are canned demos.
+                Ask questions, explore concepts, prepare for exams, or get guided problem-solving. Powered by Google Gemini AI.
               </p>
               <div className="mt-6 grid w-full gap-2 sm:grid-cols-2">
                 {suggestedPrompts.map((p, i) => (

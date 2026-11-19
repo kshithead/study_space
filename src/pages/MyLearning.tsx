@@ -20,7 +20,7 @@ export default function MyLearning() {
     <div className="space-y-5">
       <PageHeader
         title="My Learning"
-        subtitle={`${enrolled.length} enrolled courses · ${lessonsDone} lessons completed · progress lives in your browser`}
+        subtitle={`${enrolled.length} enrolled courses · ${lessonsDone} lessons completed · Track your learning progress`}
       />
 
       <Tabs defaultValue="progress">

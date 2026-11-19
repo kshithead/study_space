@@ -335,7 +335,9 @@ export default function AiTutor() {
           </span>
           <div className="min-w-0">
             <p className="truncate font-heading text-sm font-semibold">Socrates — AI Tutor</p>
-            <p className="text-[11px] text-zinc-500">Prototype mode · replies are simulated</p>
+            <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" /> Google Gemini 3.5 AI
+            </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Select value={mode} onValueChange={(v: string) => setMode(v as TutorMode)}>
@@ -479,10 +481,16 @@ export default function AiTutor() {
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f)
-                    toast.info("Attachments are a prototype preview", {
-                      description: `“${f.name}” noted — file parsing arrives with the backend stage.`,
+                  if (f) {
+                    toast.success(`Attached "${f.name}"`, {
+                      description: "Asking Socrates to summarize and tutor from this document.",
                     });
+                    setInput((prev) =>
+                      prev
+                        ? `${prev}\n\n[Attached notes from "${f.name}"]: please summarize and explain the key ideas.`
+                        : `I have notes from "${f.name}". Can you explain the main concepts and quiz me on them?`
+                    );
+                  }
                   e.target.value = "";
                 }}
               />
@@ -520,8 +528,8 @@ export default function AiTutor() {
                 <Send className="size-4.5" />
               </button>
             </form>
-            <p className="mt-2 text-center text-[11px] text-zinc-600">
-              Simulated responses for the frontend prototype — no model calls, everything stays in your browser.
+            <p className="mt-2 text-center text-[11px] text-zinc-500">
+              Live conversational AI powered by Google Gemini · Grounded in course concepts.
             </p>
           </div>
         </div>

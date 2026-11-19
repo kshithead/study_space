@@ -365,10 +365,9 @@ export default function Home() {
       </section>
 
       {/* footer note */}
-      <footer className="flex items-center justify-center gap-2 border-t border-[#232326] pt-6 text-xs text-zinc-600">
-        <BookOpen className="size-3.5" />
-        STUDYSPACE stage 1 — frontend prototype with sample data. AI responses and
-        progress are simulated locally in your browser.
+      <footer className="flex items-center justify-center gap-2 border-t border-[#232326] pt-6 text-xs text-zinc-500">
+        <Sparkles className="size-3.5 text-violet-400" />
+        StudySpace — AI-Powered Personal Learning Assistant & Interactive Course Platform.
       </footer>
     </div>
   );

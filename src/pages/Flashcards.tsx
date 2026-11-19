@@ -8,8 +8,10 @@ import {
   Sparkles,
   Wand2,
   X,
+  Loader2,
 } from "lucide-react";
-import { decks as seedDecks, generateDeckFromTopic } from "@/data/mockData";
+import { decks as seedDecks } from "@/data/mockData";
+import { generateFlashcardsWithAI } from "@/services/ai";
 import type { Deck, Flashcard } from "@/data/mockData";
 import { ProgressBar, PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,7 @@ export default function Flashcards() {
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [topic, setTopic] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const deck = userDecks.find((d) => d.id === activeDeckId) ?? userDecks[0];
   const card: Flashcard | undefined = deck.cards[cardIdx] ?? deck.cards[0];
@@ -91,26 +94,41 @@ export default function Flashcards() {
     toast.success("Deck shuffled");
   };
 
-  const generateDeck = () => {
+  const generateDeck = async () => {
     const t = topic.trim();
-    if (!t) return;
-    const newDeck: Deck = {
-      id: `deck-gen-${Date.now()}`,
-      title: t.length > 34 ? `${t.slice(0, 34)}…` : t,
-      subtitle: "AI generated · just now",
-      gradient: "from-violet-600 to-blue-600",
-      cards: generateDeckFromTopic(t),
-    };
-    setUserDecks((prev) => [newDeck, ...prev]);
-    setActiveDeckId(newDeck.id);
-    setCardIdx(0);
-    setFlipped(false);
-    setReviewedIds(new Set());
-    setGeneratorOpen(false);
-    setTopic("");
-    toast.success(`AI drafted ${newDeck.cards.length} cards`, {
-      description: `“${newDeck.title}” — refine the wording to lock it in. (Prototype generator)`,
-    });
+    if (!t || isGenerating) return;
+
+    setIsGenerating(true);
+    toast.loading(`Synthesizing flashcards for "${t}"...`, { id: "gen-cards" });
+
+    try {
+      const cards = await generateFlashcardsWithAI(t);
+      const newDeck: Deck = {
+        id: `deck-gen-${Date.now()}`,
+        title: t.length > 34 ? `${t.slice(0, 34)}…` : t,
+        subtitle: "Gemini AI generated · just now",
+        gradient: "from-violet-600 to-blue-600",
+        cards,
+      };
+      setUserDecks((prev) => [newDeck, ...prev]);
+      setActiveDeckId(newDeck.id);
+      setCardIdx(0);
+      setFlipped(false);
+      setReviewedIds(new Set());
+      setGeneratorOpen(false);
+      setTopic("");
+      toast.success(`Generated ${newDeck.cards.length} AI flashcards!`, {
+        id: "gen-cards",
+        description: `“${newDeck.title}” is ready for review.`,
+      });
+    } catch (err: any) {
+      toast.error("Generation failed", {
+        id: "gen-cards",
+        description: err.message || "Could not generate flashcards at this time.",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const selectDeck = (id: string) => {
@@ -308,11 +326,10 @@ export default function Flashcards() {
         <DialogContent className="border-[#2e2e33] bg-[#181818] sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading flex items-center gap-2">
-              <Wand2 className="size-4 text-violet-400" /> Generate a flashcard deck
+              <Wand2 className="size-4 text-violet-400" /> Generate flashcard deck
             </DialogTitle>
             <DialogDescription>
-              Prototype generator: give a topic and STUDYSPACE drafts five atomic starter
-              cards you can refine.
+              Powered by Google Gemini AI: Enter any topic or subject to dynamically create high-yield study flashcards.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -320,24 +337,34 @@ export default function Flashcards() {
               data-testid="flashcard-generator-topic-input"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g. Quantum Physics, Kubernetes networking…"
+              placeholder="e.g. Quantum Computing, React Server Components, Database Indexing…"
               onKeyDown={(e) => e.key === "Enter" && generateDeck()}
+              disabled={isGenerating}
             />
             <div className="flex justify-end gap-2">
               <Button
                 variant="ghost"
                 data-testid="flashcard-generator-cancel"
                 onClick={() => setGeneratorOpen(false)}
+                disabled={isGenerating}
               >
                 <X className="mr-1 size-4" /> Cancel
               </Button>
               <Button
                 data-testid="flashcard-generator-submit"
                 onClick={generateDeck}
-                disabled={!topic.trim()}
+                disabled={!topic.trim() || isGenerating}
                 className="bg-gradient-to-r from-violet-600 to-blue-500 text-white hover:opacity-90"
               >
-                <Sparkles className="mr-1 size-4" /> Generate 5 cards
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-1.5 size-4 animate-spin" /> Generating with AI...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-1 size-4" /> Generate 5 cards
+                  </>
+                )}
               </Button>
             </div>
           </div>

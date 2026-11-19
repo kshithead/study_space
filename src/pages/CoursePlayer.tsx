@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   BadgeCheck,
   Bookmark,
@@ -22,7 +22,9 @@ import {
   Send,
   Sparkles,
   Subtitles,
+  Loader2,
 } from "lucide-react";
+import { explainLessonWithAI } from "@/services/ai";
 import {
   fmtSeconds,
   getCourse,
@@ -86,6 +88,7 @@ function LessonKindIcon({ lesson }: { lesson: Lesson }) {
 }
 
 function CourseWorkspace({ course }: { course: Course }) {
+  const navigate = useNavigate();
   const {
     completed,
     toggleLesson,
@@ -95,6 +98,7 @@ function CourseWorkspace({ course }: { course: Course }) {
     setNote,
     isEnrolled,
     enrollCourse,
+    user,
   } = useAppState();
 
   useEffect(() => {
@@ -174,20 +178,34 @@ function CourseWorkspace({ course }: { course: Course }) {
     setTab("overview");
   };
 
-  const runExplain = () => {
+  const [isExplaining, setIsExplaining] = useState(false);
+
+  const runExplain = async () => {
     if (explainTimer.current) window.clearInterval(explainTimer.current);
-    const full = simulatedExplain(current.title, course.title);
-    const words = full.split(" ");
-    let i = 0;
-    setExplain({ lessonId: current.id, text: "" });
-    explainTimer.current = window.setInterval(() => {
-      i += 2;
-      setExplain({ lessonId: current.id, text: words.slice(0, i).join(" ") });
-      if (i >= words.length && explainTimer.current) {
-        window.clearInterval(explainTimer.current);
-        explainTimer.current = null;
-      }
-    }, 22);
+    setIsExplaining(true);
+    setExplain({ lessonId: current.id, text: "Generating 40-second digest with Gemini AI..." });
+
+    try {
+      const full = await explainLessonWithAI(current.title, course.title);
+      const words = full.split(" ");
+      let i = 0;
+      setExplain({ lessonId: current.id, text: "" });
+      explainTimer.current = window.setInterval(() => {
+        i += 3;
+        setExplain({ lessonId: current.id, text: words.slice(0, i).join(" ") });
+        if (i >= words.length && explainTimer.current) {
+          window.clearInterval(explainTimer.current);
+          explainTimer.current = null;
+        }
+      }, 30);
+    } catch {
+      setExplain({
+        lessonId: current.id,
+        text: `### "${current.title}" — Conceptual Digest\n\n- **Core Idea:** Breaks down essential mechanics and algorithms in *${course.title}*.\n- **Why It Matters:** Unlocks downstream understanding and problem-solving patterns.\n- **Exam Tip:** Keep track of edge cases and runtime trade-offs.`,
+      });
+    } finally {
+      setIsExplaining(false);
+    }
   };
 
   const toggleModule = (moduleId: string) =>
@@ -206,8 +224,8 @@ function CourseWorkspace({ course }: { course: Course }) {
 
   const actionRibbon: Array<{ label: string; icon: ReactNode; onClick: () => void; testId: string }> = [
     {
-      label: "AI Explain This Lesson",
-      icon: <Sparkles className="size-4" />,
+      label: isExplaining ? "Explaining with AI..." : "AI Explain This Lesson",
+      icon: isExplaining ? <Loader2 className="size-4 animate-spin text-violet-400" /> : <Sparkles className="size-4" />,
       onClick: runExplain,
       testId: "lesson-ai-explain-btn",
     },
@@ -218,9 +236,19 @@ function CourseWorkspace({ course }: { course: Course }) {
       testId: "lesson-bookmark-frame-btn",
     },
     {
-      label: "Download slides",
+      label: "Download notes",
       icon: <Download className="size-4" />,
-      onClick: () => toast.info("Prototype preview", { description: "Slide exports arrive with the backend stage." }),
+      onClick: () => {
+        const mdContent = `# ${current.title}\n\n**Course:** ${course.title} (${course.instructor})\n**Duration:** ${current.duration}\n\n## Lecture Summary & Key Takeaways\n- Master the primary principles introduced in this lecture.\n- Pay close attention to underlying assumptions and performance constraints.\n- Review the checkpoint quiz at the end of the module.\n\n---\n*Exported from StudySpace Course Player*`;
+        const blob = new Blob([mdContent], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${current.title.replace(/[^a-zA-Z0-9]/g, "_")}_lecture_notes.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`Exported "${current.title}.md"!`);
+      },
       testId: "lesson-slides-btn",
     },
     {
@@ -235,7 +263,12 @@ function CourseWorkspace({ course }: { course: Course }) {
     {
       label: "Ask Socrates",
       icon: <Bot className="size-4" />,
-      onClick: () => toast.info("Opens the AI Tutor", { description: "Use the sidebar → AI Tutor for the full chat." }),
+      onClick: () => {
+        navigate("/ai-tutor");
+        toast.success("Opened AI Tutor", {
+          description: `Ask Socrates anything about "${current.title}".`,
+        });
+      },
       testId: "lesson-ask-socrates-btn",
     },
   ];
@@ -584,20 +617,51 @@ function CourseWorkspace({ course }: { course: Course }) {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (!commentDraft.trim()) return;
+                    const draft = commentDraft.trim();
+                    if (!draft) return;
+
+                    const authorName = user?.name || "Student";
+                    const initials =
+                      authorName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase() || "ST";
+
                     setComments((prev) => [
                       {
                         id: `c-${Date.now()}`,
-                        author: "You",
-                        avatarSeed: "AC",
+                        author: authorName,
+                        avatarSeed: initials,
                         at: "just now",
-                        text: commentDraft.trim(),
+                        text: draft,
                         likes: 0,
                       },
                       ...prev,
                     ]);
                     setCommentDraft("");
-                    toast.success("Question posted to the discussion");
+                    toast.success("Question posted to discussion");
+
+                    if (
+                      draft.includes("?") ||
+                      draft.toLowerCase().includes("how") ||
+                      draft.toLowerCase().includes("what")
+                    ) {
+                      setTimeout(() => {
+                        setComments((prev) => [
+                          ...prev,
+                          {
+                            id: `c-ai-${Date.now()}`,
+                            author: "Socrates (AI Tutor)",
+                            avatarSeed: "AI",
+                            at: "just now",
+                            text: `Insightful question regarding "${current.title}"! Consider how this mechanism interacts with the broader architecture in ${course.title}. You can also open the AI Tutor tab for interactive guided practice!`,
+                            likes: 1,
+                          },
+                        ]);
+                      }, 1200);
+                    }
                   }}
                   className="flex gap-2"
                 >

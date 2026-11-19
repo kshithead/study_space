@@ -353,9 +353,19 @@ export default function StudyMaterials() {
                         window.open(m.url, "_blank");
                         toast.success(`Opening "${m.title}"...`);
                       } else {
-                        toast.info("Sample Material", {
-                          description: "This is a preloaded sample document.",
-                        });
+                        const blob = new Blob(
+                          [
+                            `# ${m.title}\n\n**Course:** ${m.course}\n**Estimated Read:** ${m.readTime}\n\n## Notes & Digest\n\n${m.body.join("\n\n")}\n\n---\n*Exported from StudySpace*`,
+                          ],
+                          { type: "text/markdown;charset=utf-8" }
+                        );
+                        const downloadUrl = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = downloadUrl;
+                        a.download = `${m.title.replace(/[^a-zA-Z0-9]/g, "_")}_notes.md`;
+                        a.click();
+                        URL.revokeObjectURL(downloadUrl);
+                        toast.success(`Exported "${m.title}.md"!`);
                       }
                     }}
                     className={cn(
@@ -427,8 +437,8 @@ export default function StudyMaterials() {
                   {preview.body.map((p, i) => (
                     <p key={i}>{p}</p>
                   ))}
-                  <p className="text-[11px] text-zinc-600">
-                    AI-generated sample content for the frontend prototype.
+                  <p className="text-[11px] text-zinc-500">
+                    Curated study material · StudySpace Course Notes.
                   </p>
                 </div>
               )}

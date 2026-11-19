@@ -18,6 +18,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { user as mockUser } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
+import { ambientAudio } from "@/lib/ambientAudio";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -46,9 +47,16 @@ export default function FocusRoom() {
   const [remaining, setRemaining] = useState(modeSpecs.focus.seconds);
   const [running, setRunning] = useState(false);
   const [zen, setZen] = useState(false);
-  const [activeSound, setActiveSound] = useState<string | null>("lofi");
+  const [activeSound, setActiveSound] = useState<string | null>(null);
   const [taskDraft, setTaskDraft] = useState("");
   const completionGuard = useRef<Mode | null>(null);
+
+  // Stop audio on unmount
+  useEffect(() => {
+    return () => {
+      ambientAudio.stop();
+    };
+  }, []);
 
   const total = modeSpecs[mode].seconds;
 
@@ -96,7 +104,7 @@ export default function FocusRoom() {
         <div>
           <h1 className="text-2xl font-bold sm:text-3xl">Focus Room</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pomodoro sessions with ambient soundscapes — ambient audio is a visual prototype.
+            Pomodoro sessions with soothing ambient focus soundscapes.
           </p>
         </div>
         <button
@@ -313,7 +321,7 @@ export default function FocusRoom() {
             <div className="rounded-2xl border border-[#27272a] bg-card p-4">
               <p className="font-heading text-sm font-semibold">Ambient mixer</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Pick one atmosphere — visual prototype (no audio streaming yet).
+                Select your focus atmosphere to mask background noise.
               </p>
               <ul className="mt-3 space-y-1.5">
                 {soundscapes.map((s) => {
@@ -325,8 +333,15 @@ export default function FocusRoom() {
                         type="button"
                         data-testid={`soundscape-chip-${s.id}`}
                         onClick={() => {
-                          setActiveSound(active ? null : s.id);
-                          if (!active) toast.success(`${s.name} playing`, { description: "(Visual prototype)" });
+                          if (active) {
+                            setActiveSound(null);
+                            ambientAudio.stop();
+                            toast.info("Audio muted");
+                          } else {
+                            setActiveSound(s.id);
+                            ambientAudio.play(s.id);
+                            toast.success(`${s.name} playing`, { description: "Ambient sound active." });
+                          }
                         }}
                         className={cn(
                           "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-all active:scale-[0.98]",

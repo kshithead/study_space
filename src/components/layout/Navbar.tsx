@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -22,7 +22,6 @@ import {
   allCourses,
   decks,
   materials,
-  notifications,
   user as mockUser,
 } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
@@ -100,6 +99,8 @@ export default function Navbar() {
     user: currentUser,
     isAuthenticated,
     logout,
+    enrolledCourses,
+    quizScores,
   } = useAppState();
   const user = currentUser ?? mockUser;
   const userId = currentUser?.id || "guest";
@@ -108,6 +109,78 @@ export default function Navbar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const hits = searchEverything(query);
   const unread = !notificationsRead;
+
+  // Real dynamic notifications tailored to active student
+  const dynamicNotifications = useMemo(() => {
+    const list: Array<{ id: string; title: string; body: string; time: string }> = [];
+
+    // Streak reminder
+    const streak = user.streak || 1;
+    if (streak > 1) {
+      list.push({
+        id: "notif-streak",
+        title: "Daily Streak Active 🔥",
+        body: `You are on a ${streak}-day learning streak! Keep up your daily momentum.`,
+        time: "Today",
+      });
+    } else {
+      list.push({
+        id: "notif-streak",
+        title: "Start Your Streak 🔥",
+        body: "Complete a 15-minute lesson today to start your daily study streak.",
+        time: "Today",
+      });
+    }
+
+    // Courses
+    if (enrolledCourses && enrolledCourses.length > 0) {
+      const first = allCourses.find((c) => c.id === enrolledCourses[0]);
+      if (first) {
+        list.push({
+          id: "notif-course",
+          title: "Continue Learning",
+          body: `Next video lesson is ready in "${first.title}".`,
+          time: "In progress",
+        });
+      }
+    } else {
+      list.push({
+        id: "notif-course",
+        title: "Explore Catalog",
+        body: "Choose any course from Explore to start watching lectures.",
+        time: "Getting started",
+      });
+    }
+
+    // Quizzes
+    const quizEntries = Object.entries(quizScores || {});
+    if (quizEntries.length > 0) {
+      const [qId, q] = quizEntries[0];
+      list.push({
+        id: "notif-quiz",
+        title: "Quiz Graded",
+        body: `Your score (${q.best}%) is logged in Analytics. Ready for the next checkpoint?`,
+        time: "Recent",
+      });
+    } else {
+      list.push({
+        id: "notif-quiz",
+        title: "Checkpoint Quizzes",
+        body: "Complete quizzes at the end of modules to measure your conceptual retention.",
+        time: "Tips",
+      });
+    }
+
+    // AI Tutor
+    list.push({
+      id: "notif-ai",
+      title: "Socrates AI Tutor",
+      body: "Ask Socrates to explain complex topics with analogies, code, or exam drills.",
+      time: "Live AI",
+    });
+
+    return list;
+  }, [user.streak, enrolledCourses, quizScores]);
 
   // Account-scoped search history
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
@@ -383,7 +456,7 @@ export default function Navbar() {
                 </button>
               </div>
               <ul className="max-h-80 overflow-y-auto">
-                {notifications.map((n) => (
+                {dynamicNotifications.map((n) => (
                   <li
                     key={n.id}
                     data-testid={`notification-${n.id}`}

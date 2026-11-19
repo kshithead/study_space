@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Award,
@@ -19,8 +19,9 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { allCourses, badges } from "@/data/mockData";
+import { allCourses } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
+import { computeUserBadges } from "@/lib/userAnalytics";
 import { PageHeader, ProgressBar } from "@/components/shared";
 import {
   DEFAULT_NEUTRAL_AVATAR,
@@ -42,6 +43,8 @@ export default function Profile() {
     updateUser,
     logout,
     isAuthenticated,
+    chatSessions,
+    pomodorosToday,
   } = useAppState();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -95,12 +98,25 @@ export default function Profile() {
   const avgAccuracy =
     scores.length > 0
       ? Math.round(scores.reduce((n, s) => n + (s?.best || 0), 0) / scores.length)
-      : 82;
+      : null;
 
   const currentXp = typeof user.xp === "number" ? user.xp : 150;
   const targetXp = typeof user.xpToNext === "number" ? user.xpToNext : 1000;
   const xpPct = Math.min(100, Math.round((currentXp / Math.max(targetXp, 1)) * 100));
-  const earned = badges.filter((b) => b.earned);
+
+  const dynamicBadges = useMemo(
+    () =>
+      computeUserBadges({
+        user,
+        completed,
+        quizScores,
+        enrolledCourses: enrolled.map((c) => c.id),
+        chatSessions,
+        pomodorosToday,
+      }),
+    [user, completed, quizScores, enrolled, chatSessions, pomodorosToday]
+  );
+  const earned = dynamicBadges.filter((b) => b.earned);
 
   const stats = [
     {
@@ -120,14 +136,14 @@ export default function Profile() {
     {
       id: "streak",
       label: "Day streak",
-      value: `${user.streak || 1} days`,
+      value: `${user.streak || 1} day${(user.streak || 1) > 1 ? "s" : ""}`,
       icon: Flame,
       tint: "text-orange-400",
     },
     {
       id: "accuracy",
       label: "Quiz accuracy",
-      value: `${avgAccuracy}%`,
+      value: avgAccuracy !== null ? `${avgAccuracy}%` : "—",
       icon: Zap,
       tint: "text-emerald-400",
     },
@@ -523,12 +539,12 @@ export default function Profile() {
         <div className="rounded-2xl border border-[#27272a] bg-card p-5" data-testid="profile-achievements">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-heading flex items-center gap-2 text-sm font-semibold text-white">
-              <Award className="size-4 text-amber-400" /> Achievements ({earned.length}/{badges.length})
+              <Award className="size-4 text-amber-400" /> Achievements ({earned.length}/{dynamicBadges.length})
             </h3>
             <span className="text-xs text-muted-foreground">Level {user.level || 1} Rewards</span>
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {badges.map((b) => (
+            {dynamicBadges.map((b) => (
               <div
                 key={b.id}
                 className={cn(
@@ -550,6 +566,9 @@ export default function Profile() {
                 </span>
                 <p className="mt-2 text-xs font-semibold text-zinc-100">{b.name}</p>
                 <p className="mt-0.5 text-[10px] text-zinc-400 line-clamp-1">{b.desc}</p>
+                <p className={cn("mt-1 text-[9px] font-medium", b.earned ? "text-emerald-400" : "text-zinc-500")}>
+                  {b.progressText}
+                </p>
               </div>
             ))}
           </div>

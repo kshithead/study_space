@@ -121,6 +121,43 @@ function getUserProgressKey(userId?: string): string {
   return `ss.progress_v3.${userId || "guest"}`;
 }
 
+function getUserChatKey(userId?: string): string {
+  return `ss.chats_v2.${userId || "guest"}`;
+}
+
+function loadUserChatSessions(userId?: string, email?: string): ChatSession[] {
+  const isDemo = userId === "usr_demo_alex" || email === "alex.carter@studyspace.app";
+  const key = getUserChatKey(userId);
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error("Failed to parse chats for user", userId, e);
+  }
+  // Only the preloaded demo account gets sample conversations; any real user starts with their own fresh history
+  return isDemo ? seedChatSessions : [];
+}
+
+function getUserPomodoroKey(userId?: string): string {
+  return `ss.pomodoros_v2.${userId || "guest"}`;
+}
+
+function loadUserPomodoro(userId?: string): { date: string; count: number } {
+  const key = getUserPomodoroKey(userId);
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data && data.date === todayKey()) return data;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return { date: todayKey(), count: 0 };
+}
+
 function loadUserProgress(userId?: string, email?: string): UserProgressData {
   const isDemo = userId === "usr_demo_alex" || email === "alex.carter@studyspace.app";
   const key = getUserProgressKey(userId);
@@ -186,22 +223,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     "ss.mobileNav.open",
     false,
   );
-  const [chatSessions, setChatSessions] = usePersistentState<ChatSession[]>(
-    "ss.chats",
-    seedChatSessions,
+  // Authenticated user state
+  const [storedUser, setStoredUser] = usePersistentState<any>("ss.user", defaultUser);
+  const [user, setUserState] = useState<UserProfile>(() => normalizeUser(storedUser));
+
+  // User-scoped AI chat sessions (strictly isolated per user account)
+  const [chatSessions, setChatSessionsState] = useState<ChatSession[]>(() =>
+    loadUserChatSessions(user.id, user.email)
   );
-  const [pomodoroTally, setPomodoroTally] = usePersistentState<{
-    date: string;
-    count: number;
-  }>("ss.pomodoros", { date: todayKey(), count: 2 });
+
+  // User-scoped pomodoro tally
+  const [pomodoroTally, setPomodoroTallyState] = useState<{ date: string; count: number }>(() =>
+    loadUserPomodoro(user.id)
+  );
+
   const [notificationsRead, setNotificationsRead] = usePersistentState(
     "ss.notifsRead",
     false,
   );
-
-  // Authenticated user state
-  const [storedUser, setStoredUser] = usePersistentState<any>("ss.user", defaultUser);
-  const [user, setUserState] = useState<UserProfile>(() => normalizeUser(storedUser));
 
   // User-scoped progress state (strictly isolated per user account)
   const [userProgress, setUserProgress] = useState<UserProgressData>(() =>
@@ -213,10 +252,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setUserState(normalizeUser(storedUser));
   }, [storedUser]);
 
-  // When active user ID or email changes, switch immediately to their isolated progress
+  // When active user ID or email changes, switch immediately to their isolated progress, chats, and pomodoros
   useEffect(() => {
-    const p = loadUserProgress(user.id, user.email);
-    setUserProgress(p);
+    setUserProgress(loadUserProgress(user.id, user.email));
+    setChatSessionsState(loadUserChatSessions(user.id, user.email));
+    setPomodoroTallyState(loadUserPomodoro(user.id));
   }, [user.id, user.email]);
 
   // Helper to persist user-scoped progress changes
@@ -407,32 +447,54 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   const upsertChatSession = useCallback(
-    (session: ChatSession) =>
-      setChatSessions((prev) => {
+    (session: ChatSession) => {
+      setChatSessionsState((prev) => {
         const idx = prev.findIndex((s) => s.id === session.id);
-        if (idx === -1) return [session, ...prev];
-        const next = [...prev];
-        next[idx] = session;
+        const next = idx === -1 ? [session, ...prev] : [...prev];
+        if (idx !== -1) next[idx] = session;
+        const key = getUserChatKey(user.id);
+        try {
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch (e) {
+          console.error("Failed to save chat sessions for user:", user.id, e);
+        }
         return next;
-      }),
-    [setChatSessions],
+      });
+    },
+    [user.id]
   );
 
   const deleteChatSession = useCallback(
-    (id: string) =>
-      setChatSessions((prev) => prev.filter((s) => s.id !== id)),
-    [setChatSessions],
+    (id: string) => {
+      setChatSessionsState((prev) => {
+        const next = prev.filter((s) => s.id !== id);
+        const key = getUserChatKey(user.id);
+        try {
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch (e) {
+          console.error("Failed to delete chat session for user:", user.id, e);
+        }
+        return next;
+      });
+    },
+    [user.id]
   );
 
-  const incrementPomodoros = useCallback(
-    () =>
-      setPomodoroTally((prev) =>
+  const incrementPomodoros = useCallback(() => {
+    setPomodoroTallyState((prev) => {
+      const next =
         prev.date === todayKey()
           ? { ...prev, count: prev.count + 1 }
-          : { date: todayKey(), count: 1 },
-      ),
-    [setPomodoroTally],
-  );
+          : { date: todayKey(), count: 1 };
+      const key = getUserPomodoroKey(user.id);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch (e) {
+        // ignore
+      }
+      return next;
+    });
+  }, [user.id]);
 
   const recordQuizScore = useCallback(
     (quizId: string, pct: number) => {

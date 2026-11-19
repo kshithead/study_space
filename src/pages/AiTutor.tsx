@@ -146,6 +146,13 @@ export default function AiTutor() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [active?.messages.length, streamText]);
 
+  // Reset activeId when chatSessions change or when user account switches
+  useEffect(() => {
+    if (activeId && !chatSessions.some((s) => s.id === activeId)) {
+      setActiveId(chatSessions[0]?.id ?? null);
+    }
+  }, [chatSessions, activeId]);
+
   const send = async (raw?: string) => {
     const text = (raw ?? input).trim();
     if (!text || streamText !== null) return;
@@ -266,10 +273,16 @@ export default function AiTutor() {
           <History className="size-3.5" /> History
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-3">
-          {groups.map(
-            (g) =>
-              g.sessions.length > 0 && (
-                <div key={g.label} className="mb-3">
+          {sortedSessions.length === 0 ? (
+            <div className="px-3 py-6 text-center text-xs text-zinc-500">
+              <p>No previous sessions.</p>
+              <p className="mt-1 text-[11px] text-zinc-600">Your AI chat history will appear here.</p>
+            </div>
+          ) : (
+            groups.map(
+              (g) =>
+                g.sessions.length > 0 && (
+                  <div key={g.label} className="mb-3">
                   <p className="px-2 py-1 text-[11px] font-medium text-zinc-600">
                     {g.label}
                   </p>
@@ -308,6 +321,7 @@ export default function AiTutor() {
                   </ul>
                 </div>
               ),
+            )
           )}
         </div>
       </aside>

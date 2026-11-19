@@ -15,6 +15,8 @@ import {
   BarChart3,
   FileText,
   LogIn,
+  Clock,
+  X,
 } from "lucide-react";
 import {
   allCourses,
@@ -100,11 +102,55 @@ export default function Navbar() {
     logout,
   } = useAppState();
   const user = currentUser ?? mockUser;
+  const userId = currentUser?.id || "guest";
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const hits = searchEverything(query);
   const unread = !notificationsRead;
+
+  // Account-scoped search history
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`ss.searches_v2.${userId}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Switch search history when account switches
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`ss.searches_v2.${userId}`);
+      setRecentSearches(raw ? JSON.parse(raw) : []);
+    } catch {
+      setRecentSearches([]);
+    }
+  }, [userId]);
+
+  const saveSearchTerm = (term: string) => {
+    const clean = term.trim();
+    if (!clean) return;
+    setRecentSearches((prev) => {
+      const next = [clean, ...prev.filter((t) => t.toLowerCase() !== clean.toLowerCase())].slice(0, 6);
+      try {
+        localStorage.setItem(`ss.searches_v2.${userId}`, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    try {
+      localStorage.removeItem(`ss.searches_v2.${userId}`);
+    } catch {
+      // ignore
+    }
+  };
 
   // ⌘K / Ctrl+K focuses the search bar
   useEffect(() => {
@@ -118,7 +164,9 @@ export default function Navbar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const go = (to: string) => {
+  const go = (to: string, term?: string) => {
+    if (term) saveSearchTerm(term);
+    else if (query.trim()) saveSearchTerm(query.trim());
     setFocused(false);
     navigate(to);
   };
@@ -237,6 +285,43 @@ export default function Navbar() {
               >
                 See all results for “{query.trim()}”
               </button>
+            </div>
+          ) : focused && query.trim().length === 0 && recentSearches.length > 0 ? (
+            <div
+              data-testid="search-recent-dropdown"
+              className="absolute inset-x-0 top-12 overflow-hidden rounded-2xl border border-[#2e2e33] bg-popover shadow-2xl shadow-black/60"
+            >
+              <div className="flex items-center justify-between border-b border-[#27272a] px-4 py-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Clock className="size-3 text-violet-400" /> Recent Searches
+                </span>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={clearRecentSearches}
+                  className="text-[11px] text-zinc-400 hover:text-white transition-colors"
+                >
+                  Clear history
+                </button>
+              </div>
+              <ul className="py-1">
+                {recentSearches.map((term) => (
+                  <li key={term}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setQuery(term);
+                        go(`/explore?q=${encodeURIComponent(term)}`, term);
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-[#26262b]"
+                    >
+                      <Clock className="size-3 text-zinc-500" />
+                      <span className="truncate">{term}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
         </div>

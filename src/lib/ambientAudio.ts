@@ -1,11 +1,12 @@
 // Web Audio Ambient Sound Generator for Focus Room
-// Generates rain, warm cafe noise, 40Hz binaural waves, and forest wind dynamically
+// Generates rain, warm cafe lofi, 40Hz binaural waves, and deep forest breeze dynamically
 
 class AmbientSoundEngine {
   private ctx: AudioContext | null = null;
   private currentType: string | null = null;
   private gainNode: GainNode | null = null;
   private activeNodes: Array<AudioNode> = [];
+  private stopTimeout: any = null;
 
   private getContext(): AudioContext {
     if (!this.ctx) {
@@ -19,88 +20,132 @@ class AmbientSoundEngine {
   }
 
   public play(type: "rain" | "lofi" | "binaural" | "forest" | string) {
-    this.stop();
-    const ctx = this.getContext();
+    // If a stop timeout was pending from a previous switch, clear it immediately
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
 
+    // Immediately cleanup previous nodes so they don't overlap
+    this.cleanupNodes();
+
+    const ctx = this.getContext();
     this.currentType = type;
-    this.gainNode = ctx.createGain();
-    this.gainNode.gain.setValueAtTime(0.01, ctx.currentTime);
-    // Smooth fade in
-    this.gainNode.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 1.2);
-    this.gainNode.connect(ctx.destination);
+
+    // Master gain for ambient atmosphere
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.18, now + 0.6);
+    gain.connect(ctx.destination);
+    this.gainNode = gain;
 
     if (type === "binaural") {
-      // 40Hz Gamma Focus Binaural Beats (200Hz Base, 240Hz Harmonic)
+      // 40Hz Gamma Focus Binaural Beats (200Hz base + 240Hz harmonic)
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
       osc1.type = "sine";
       osc2.type = "sine";
-      osc1.frequency.setValueAtTime(200, ctx.currentTime);
-      osc2.frequency.setValueAtTime(240, ctx.currentTime);
+      osc1.frequency.setValueAtTime(200, now);
+      osc2.frequency.setValueAtTime(240, now);
 
-      osc1.connect(this.gainNode);
-      osc2.connect(this.gainNode);
+      osc1.connect(gain);
+      osc2.connect(gain);
       osc1.start();
       osc2.start();
       this.activeNodes.push(osc1, osc2);
     } else {
-      // Noise buffer for Rain, Lofi, and Forest
-      const bufferSize = ctx.sampleRate * 2;
-      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      // 5-second seamless looped noise buffer
+      const sampleRate = ctx.sampleRate;
+      const bufferSize = sampleRate * 5;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, sampleRate);
       const output = noiseBuffer.getChannelData(0);
 
-      let lastOut = 0.0;
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
       for (let i = 0; i < bufferSize; i++) {
         const white = Math.random() * 2 - 1;
-        // Filter into brown/pink noise
         if (type === "rain") {
-          // Rain: crisp pink noise
-          output[i] = (lastOut + 0.04 * white) / 1.04;
+          // Paul Kellet's Pink Noise algorithm (natural rainfall sound)
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          b3 = 0.86650 * b3 + white * 0.3104856;
+          b4 = 0.55000 * b4 + white * 0.5329522;
+          b5 = -0.7616 * b5 - white * 0.0168980;
+          output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+          b6 = white * 0.115926;
         } else if (type === "lofi") {
-          // Lofi: warm brown noise
-          output[i] = (lastOut + 0.02 * white) / 1.02;
+          // Warm brown noise (deep relaxing cafe hum)
+          b0 = (b0 + 0.02 * white) / 1.02;
+          output[i] = b0 * 2.8;
         } else {
-          // Forest: gentle wind modulation
-          output[i] = (lastOut + 0.03 * white) / 1.03;
+          // Forest breeze: soft modulated pink/brown noise
+          b0 = (b0 + 0.03 * white) / 1.03;
+          output[i] = b0 * 2.2;
         }
-        lastOut = output[i];
       }
 
-      const whiteNoise = ctx.createBufferSource();
-      whiteNoise.buffer = noiseBuffer;
-      whiteNoise.loop = true;
+      const source = ctx.createBufferSource();
+      source.buffer = noiseBuffer;
+      source.loop = true;
 
       const filter = ctx.createBiquadFilter();
       if (type === "rain") {
         filter.type = "lowpass";
-        filter.frequency.setValueAtTime(900, ctx.currentTime);
+        filter.frequency.setValueAtTime(1200, now);
       } else if (type === "lofi") {
         filter.type = "bandpass";
-        filter.frequency.setValueAtTime(450, ctx.currentTime);
-        filter.Q.setValueAtTime(1.5, ctx.currentTime);
+        filter.frequency.setValueAtTime(400, now);
+        filter.Q.setValueAtTime(1.2, now);
       } else {
         filter.type = "lowpass";
-        filter.frequency.setValueAtTime(650, ctx.currentTime);
+        filter.frequency.setValueAtTime(700, now);
       }
 
-      whiteNoise.connect(filter);
-      filter.connect(this.gainNode);
-      whiteNoise.start();
-      this.activeNodes.push(whiteNoise, filter);
+      source.connect(filter);
+      filter.connect(gain);
+      source.start();
+      this.activeNodes.push(source, filter);
     }
   }
 
-  public stop() {
-    if (this.gainNode && this.ctx) {
+  private cleanupNodes() {
+    for (const node of this.activeNodes) {
       try {
-        this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.ctx.currentTime);
-        this.gainNode.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.5);
+        if ("stop" in node && typeof (node as any).stop === "function") {
+          (node as any).stop();
+        }
+        node.disconnect();
       } catch {
         // ignore
       }
     }
-    setTimeout(() => {
-      for (const node of this.activeNodes) {
+    this.activeNodes = [];
+  }
+
+  public stop() {
+    if (this.stopTimeout) {
+      clearTimeout(this.stopTimeout);
+      this.stopTimeout = null;
+    }
+
+    if (this.gainNode && this.ctx) {
+      try {
+        const cur = this.gainNode.gain.value;
+        this.gainNode.gain.setValueAtTime(cur, this.ctx.currentTime);
+        this.gainNode.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.4);
+      } catch {
+        // ignore
+      }
+    }
+
+    // Capture current nodes in a closure so future calls don't get wiped
+    const oldNodes = [...this.activeNodes];
+    this.activeNodes = [];
+    this.currentType = null;
+
+    this.stopTimeout = setTimeout(() => {
+      for (const node of oldNodes) {
         try {
           if ("stop" in node && typeof (node as any).stop === "function") {
             (node as any).stop();
@@ -110,9 +155,8 @@ class AmbientSoundEngine {
           // ignore
         }
       }
-      this.activeNodes = [];
-      this.currentType = null;
-    }, 550);
+      this.stopTimeout = null;
+    }, 450);
   }
 
   public isPlaying(type?: string): boolean {

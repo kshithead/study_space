@@ -68,10 +68,15 @@ export default function FocusRoom() {
 
   // ticking
   useEffect(() => {
-    if (!running || remaining <= 0) return;
-    const t = window.setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
+    if (!running) return;
+    const t = window.setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) return 0;
+        return r - 1;
+      });
+    }, 1000);
     return () => window.clearInterval(t);
-  }, [running, remaining]);
+  }, [running]);
 
   // completion
   useEffect(() => {

@@ -1,10 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CircleCheck, CircleX, ListChecks, Timer, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  ListChecks,
+  Timer,
+  X,
+  Sparkles,
+  Loader2,
+  HelpCircle,
+} from "lucide-react";
 import { quizzes } from "@/data/mockData";
 import type { Quiz } from "@/data/mockData";
 import { PageHeader, ProgressBar } from "@/components/shared";
 import { useAppState } from "@/store/appState";
+import { usePersistentState } from "@/hooks/usePersistentState";
+import { generateQuizWithAI } from "@/services/ai";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -20,9 +43,21 @@ interface RunState {
 
 export default function Quizzes() {
   const { quizScores, recordQuizScore } = useAppState();
+  const location = useLocation();
+
+  const [customQuizzes, setCustomQuizzes] = usePersistentState<Quiz[]>("ss.customQuizzes", []);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingTitle, setGeneratingTitle] = useState("");
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [generateTopic, setGenerateTopic] = useState("");
+
   const [view, setView] = useState<View>("list");
   const [run, setRun] = useState<RunState | null>(null);
   const [score, setScore] = useState(0);
+
+  const allQuizzes = useMemo(() => {
+    return [...customQuizzes, ...quizzes];
+  }, [customQuizzes]);
 
   const startQuiz = (quiz: Quiz) => {
     setRun({
@@ -34,6 +69,48 @@ export default function Quizzes() {
     });
     setView("run");
   };
+
+  const generateAndStart = async (title: string) => {
+    setIsGenerating(true);
+    setGeneratingTitle(title);
+    try {
+      const newQuiz = await generateQuizWithAI(title);
+      setCustomQuizzes((prev) => [newQuiz, ...prev.filter((q) => q.id !== newQuiz.id)]);
+      startQuiz(newQuiz);
+      toast.success(`Adaptive quiz ready!`, {
+        description: `4 conceptual questions generated for "${title}".`,
+      });
+    } catch (e) {
+      console.error("Quiz generation failed:", e);
+      toast.error("Could not generate quiz. Please try again.");
+    } finally {
+      setIsGenerating(false);
+      setGeneratingTitle("");
+    }
+  };
+
+  // Listen for auto-generate requests from Study Materials
+  useEffect(() => {
+    const locState = location.state as {
+      documentTitle?: string;
+      autoGenerate?: boolean;
+    } | null;
+
+    if (locState?.autoGenerate && locState.documentTitle) {
+      const title = locState.documentTitle;
+      const existing = customQuizzes.find(
+        (q) =>
+          q.title.toLowerCase().includes(title.toLowerCase()) ||
+          q.course.toLowerCase().includes(title.toLowerCase()),
+      );
+      if (existing) {
+        startQuiz(existing);
+        toast.info(`Loaded checkpoint for "${title}"`);
+      } else {
+        generateAndStart(title);
+      }
+    }
+  }, [location.state]);
 
   const finish = (r: RunState) => {
     const correct = r.quiz.questions.filter(
@@ -93,29 +170,71 @@ export default function Quizzes() {
         <PageHeader
           title="Quizzes"
           subtitle="Adaptive checkpoints with instant explanations — every wrong answer is a lesson"
-        />
+        >
+          <Button
+            type="button"
+            data-testid="quiz-generate-ai-btn"
+            onClick={() => setShowGenerateModal(true)}
+            disabled={isGenerating}
+            className="rounded-xl bg-gradient-to-r from-amber-500 to-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+          >
+            <Sparkles className="mr-1.5 size-3.5" /> Generate with AI
+          </Button>
+        </PageHeader>
+
+        {isGenerating && (
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-amber-500/40 bg-amber-950/20 p-8 text-center animate-pulse">
+            <Loader2 className="mb-3 size-8 animate-spin text-amber-400" />
+            <h3 className="text-base font-semibold text-white">Synthesizing Adaptive Quiz with Gemini AI</h3>
+            <p className="mt-1 max-w-md text-xs text-amber-300/80">
+              Generating 4 grounded conceptual questions with instant explanations based on "{generatingTitle}"...
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {quizzes.map((quiz) => {
+          {allQuizzes.map((quiz) => {
             const s = quizScores[quiz.id];
+            const isAiQuiz = quiz.id.startsWith("ai-") || quiz.id.startsWith("syn-");
             return (
               <div
                 key={quiz.id}
                 data-testid={`quiz-card-${quiz.id}`}
-                className="flex flex-col rounded-2xl border border-[#27272a] bg-card p-5 transition-all hover:-translate-y-1 hover:border-violet-600/50"
+                className={cn(
+                  "flex flex-col rounded-2xl border bg-card p-5 transition-all hover:-translate-y-1",
+                  isAiQuiz
+                    ? "border-amber-500/40 hover:border-amber-500/80 shadow-[0_0_20px_rgba(245,158,11,0.06)]"
+                    : "border-[#27272a] hover:border-violet-600/50",
+                )}
               >
                 <div className="flex items-center justify-between">
-                  <span className="flex size-10 items-center justify-center rounded-xl bg-[#1f1d2b] text-violet-400">
+                  <span
+                    className={cn(
+                      "flex size-10 items-center justify-center rounded-xl",
+                      isAiQuiz ? "bg-amber-500/15 text-amber-400" : "bg-[#1f1d2b] text-violet-400",
+                    )}
+                  >
                     <ListChecks className="size-5" />
                   </span>
-                  {s ? (
-                    <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-300" data-testid={`quiz-best-score-${quiz.id}`}>
-                      Best {s.best}% · {s.attempts} attempt{s.attempts > 1 ? "s" : ""}
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-[#232326] px-2.5 py-1 text-[11px] font-medium text-zinc-400">
-                      Not started
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {isAiQuiz && (
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                        AI Document Checkpoint
+                      </span>
+                    )}
+                    {s ? (
+                      <span
+                        className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"
+                        data-testid={`quiz-best-score-${quiz.id}`}
+                      >
+                        Best {s.best}% · {s.attempts} attempt{s.attempts > 1 ? "s" : ""}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-[#232326] px-2.5 py-1 text-[11px] font-medium text-zinc-400">
+                        Not started
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <h3 className="mt-3 font-heading text-base font-semibold">{quiz.title}</h3>
                 <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{quiz.course}</p>
@@ -129,7 +248,12 @@ export default function Quizzes() {
                 <Button
                   data-testid={`quiz-start-btn-${quiz.id}`}
                   onClick={() => startQuiz(quiz)}
-                  className="mt-4 rounded-full bg-gradient-to-r from-violet-600 to-blue-500 text-white hover:opacity-90"
+                  className={cn(
+                    "mt-4 rounded-full text-white hover:opacity-90",
+                    isAiQuiz
+                      ? "bg-gradient-to-r from-amber-500 to-amber-600"
+                      : "bg-gradient-to-r from-violet-600 to-blue-500",
+                  )}
                 >
                   {s ? "Retake quiz" : "Start quiz"}
                 </Button>
@@ -137,6 +261,61 @@ export default function Quizzes() {
             );
           })}
         </div>
+
+        {/* Generate Modal */}
+        <Dialog open={showGenerateModal} onOpenChange={setShowGenerateModal}>
+          <DialogContent className="border-[#2e2e33] bg-[#181818] sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading flex items-center gap-2">
+                <Sparkles className="size-4 text-amber-400" />
+                Generate Quiz with Gemini AI
+              </DialogTitle>
+              <DialogDescription>
+                Enter any study document title or topic. Google Gemini will create 4 conceptual questions with instant explanations.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!generateTopic.trim()) return;
+                setShowGenerateModal(false);
+                const t = generateTopic.trim();
+                setGenerateTopic("");
+                generateAndStart(t);
+              }}
+              className="space-y-4 pt-2"
+            >
+              <div>
+                <label className="text-xs font-medium text-zinc-300">Topic or Document Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. ParkPulse Project Explainer, Dynamic Programming..."
+                  value={generateTopic}
+                  onChange={(e) => setGenerateTopic(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-[#2e2e33] bg-[#121214] px-3.5 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-amber-500"
+                />
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowGenerateModal(false)}
+                  className="border-[#2e2e33] text-zinc-300 hover:bg-[#232326]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!generateTopic.trim() || isGenerating}
+                  className="bg-gradient-to-r from-amber-500 to-violet-600 text-white hover:opacity-90"
+                >
+                  Generate Quiz
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

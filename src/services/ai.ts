@@ -69,31 +69,32 @@ function getModeSystemPrompt(mode: TutorMode): string {
   switch (normalized) {
     case "socratic":
       return (
-        "You are Socrates, an expert AI academic mentor and project tutor. " +
-        "When the user asks questions, ALWAYS provide a direct, comprehensive, and factually thorough answer first. If an authentic study document is provided, you MUST ground your answer directly and specifically in its contents, citing exact technologies, architecture, sections, and concepts from the text. Never give vague philosophical fluff or withhold the answer. " +
-        "After providing the full factual answer, conclude with a sharp, insightful Socratic follow-up question or concept drill to test the student's retention."
+        "You are StudySpace AI, a supportive, world-class academic tutor and software engineer. " +
+        "Provide immediate, comprehensive, clear, and factually thorough explanations using clean markdown with headings, bold highlights, bullet points, and code blocks where relevant. " +
+        "Do NOT speak in archaic riddles, do NOT say 'Greetings seeker of knowledge', and NEVER withhold the answer. Explain the concept thoroughly and directly first. " +
+        "Then, at the very end of your response, provide one short, engaging follow-up checkpoint question to test the student's understanding."
       );
     case "exam":
       return (
         "You are a rigorous university professor running an exam prep checkpoint. " +
-        "Frame your explanation like a university exam review: cite exact definitions from the document, highlight common exam pitfalls, traps, and grading rubrics. " +
-        "Include a mini practice question or checkpoint for them to solve."
+        "Provide direct, high-scoring exam explanations: cite exact definitions, highlight common traps, asymptotic complexity, and grading rubrics. " +
+        "Conclude with a sample exam question."
       );
     case "eli5":
       return (
         "You are an engaging tutor explaining concepts in 'Explain Like I'm 5' style. " +
-        "Use simple everyday language, vivid real-world analogies, and relatable stories based on the document's subject matter. " +
+        "Use simple everyday language, vivid real-world analogies, and relatable stories. " +
         "Avoid heavy mathematical jargon unless you explain it through a visual metaphor first."
       );
     case "deepdive":
       return (
         "You are a principal engineer and computer science researcher. " +
         "Provide a comprehensive, rigorous deep dive: architectural breakdown, mathematical/algorithmic formulation, time/space complexity, " +
-        "trade-offs, edge cases, and clean, runnable code examples with comments based on the document."
+        "trade-offs, edge cases, and clean, runnable code examples with comments."
       );
     default:
       return (
-        "You are Socrates, a supportive, encouraging, and highly intelligent AI Personal Learning Assistant. " +
+        "You are StudySpace AI, a supportive, encouraging, and highly intelligent AI learning assistant. " +
         "Provide clear, conversational, and well-structured academic explanations using clean markdown formatting, bold points, and code blocks."
       );
   }
@@ -123,27 +124,34 @@ async function callGeminiDirectly(
     docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT]: The student is specifically studying and asking questions about their uploaded study material: "${documentTitle}". Ground your explanations, key definitions, summaries, and analogies around this document's subject matter.`;
   }
 
-  // Build multi-turn conversational contents
+  // Build multi-turn conversational contents ensuring strict user/model alternation
   const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
-  // Add conversation history (last 6 messages)
+  // Add conversation history with alternating roles
   const recentHistory = history.slice(-6);
+  let lastRole: "user" | "model" | null = null;
   for (const m of recentHistory) {
-    if (!m.content.trim()) continue;
-    contents.push({
-      role: m.role === "user" ? "user" : "model",
-      parts: [{ text: m.content }],
-    });
+    if (!m.content || !m.content.trim()) continue;
+    const role: "user" | "model" = m.role === "user" ? "user" : "model";
+    if (role !== lastRole) {
+      contents.push({ role, parts: [{ text: m.content }] });
+      lastRole = role;
+    }
+  }
+
+  // If the last history message was user, remove it so the new prompt is not a duplicate user role
+  if (contents.length > 0 && contents[contents.length - 1].role === "user") {
+    contents.pop();
   }
 
   // Add latest query with system instruction context
-  const currentPrompt = `${systemInstruction}${docGrounding}\n\nStudent says: "${query}"`;
+  const currentPrompt = `${systemInstruction}${docGrounding}\n\nStudent question: "${query}"`;
   contents.push({
     role: "user",
     parts: [{ text: currentPrompt }],
   });
 
-  const models = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+  const models = ["gemini-3.5-flash-lite"];
 
   for (const model of models) {
     try {
@@ -155,7 +163,7 @@ async function callGeminiDirectly(
           contents,
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 1200,
+            maxOutputTokens: 1500,
           },
         }),
       });
@@ -165,9 +173,12 @@ async function callGeminiDirectly(
       }
 
       const data = await res.json();
-      const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (candidate && candidate.trim()) {
-        return candidate.trim();
+      const parts = data.candidates?.[0]?.content?.parts;
+      if (Array.isArray(parts)) {
+        const text = parts.map((p: any) => p.text || "").join("").trim();
+        if (text) {
+          return text;
+        }
       }
     } catch {
       // Try next model fallback

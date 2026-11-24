@@ -369,6 +369,7 @@ export default function AiTutor() {
     if (streamText !== null) return;
     setActiveId(null);
     setInput("");
+    setExtractedDocText("");
   };
 
   const startOfDay = new Date();
@@ -506,8 +507,8 @@ export default function AiTutor() {
           </div>
         </div>
 
-        {/* Document grounding banner if session is linked to a document */}
-        {active?.title.startsWith("Study: ") && (
+        {/* Document grounding banner or general chat indicator */}
+        {active?.title.startsWith("Study: ") ? (
           <div className="flex items-center justify-between border-b border-emerald-500/25 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-300">
             <span className="flex items-center gap-2 font-medium">
               <FileText className="size-3.5 text-emerald-400" />
@@ -524,6 +525,16 @@ export default function AiTutor() {
             </span>
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
               {(extractedDocText || active.docText) ? "Deep Text Grounding Active" : "RAG Grounding Active"}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between border-b border-violet-500/20 bg-violet-950/15 px-4 py-1.5 text-xs text-violet-300">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Sparkles className="size-3.5 text-violet-400" />
+              <span>General Academic AI Tutoring Mode</span>
+            </span>
+            <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+              Freeform AI Chat
             </span>
           </div>
         )}

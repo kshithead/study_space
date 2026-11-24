@@ -1,5 +1,5 @@
 import { Bell, Bot, Moon, Palette, Save, Target, UserRound } from "lucide-react";
-import { tutorModes, user as mockUser } from "@/data/mockData";
+import { tutorModes } from "@/data/mockData";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useAppState } from "@/store/appState";
 import { DEFAULT_NEUTRAL_AVATAR, updateUserProfile } from "@/services/auth";
@@ -53,8 +53,7 @@ function ToggleRow({ label, desc, checked, onChange, testId }: ToggleRowProps) {
 }
 
 export default function Settings() {
-  const { user: currentUser, updateUser, isAuthenticated } = useAppState();
-  const user = currentUser ?? mockUser;
+  const { user, updateUser, isAuthenticated } = useAppState();
   const [userName, setUserName] = useState(user.name);
   const [userEmail, setUserEmail] = useState(user.email);
   const [dailyGoal, setDailyGoal] = usePersistentState("ss.settings.dailyGoal", "1.5");

@@ -103,15 +103,6 @@ export default function Login() {
     }
   };
 
-  const handleFillDemo = () => {
-    setEmail("alex.carter@studyspace.app");
-    setPassword("studyspace2026");
-    setErrorMsg("");
-    toast.info("Demo credentials loaded", {
-      description: "Click 'Sign in' below to verify against the backend database.",
-    });
-  };
-
   const handleReset = () => {
     setDone(false);
     setEmail("");
@@ -186,7 +177,7 @@ export default function Login() {
                     name="fullname"
                     type="text"
                     required
-                    placeholder="Alex Carter"
+                    placeholder="Your full name"
                     value={fullname}
                     onChange={(e) => setFullname(e.target.value)}
                   />
@@ -287,16 +278,6 @@ export default function Login() {
                   <input type="checkbox" name="remember" defaultChecked />
                   <span>Remember me</span>
                 </label>
-                {mode === "signin" && (
-                  <button
-                    type="button"
-                    className="cl-login04__link"
-                    onClick={handleFillDemo}
-                    title="Preload verified demo credentials"
-                  >
-                    Quick fill Demo Student
-                  </button>
-                )}
               </div>
 
               <button

@@ -1475,21 +1475,20 @@ export const recentActivity = [
 // ── User ─────────────────────────────────────────────────────────────────────
 
 export const user = {
-  name: "Alex Carter",
-  firstName: "Alex",
-  handle: "@alex.studies",
-  email: "alex.carter@studyspace.app",
-  avatar:
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?crop=entropy&cs=srgb&fm=jpg&q=80&auto=format&fit=crop&w=200&h=200",
-  level: 12,
-  levelName: "Trailblazer",
-  xp: 8640,
-  xpToNext: 10000,
-  streak: 14,
+  name: "Student",
+  firstName: "Student",
+  handle: "@learner",
+  email: "",
+  avatar: "",
+  level: 1,
+  levelName: "Explorer",
+  xp: 0,
+  xpToNext: 1000,
+  streak: 0,
   weeklyGoalHours: 6,
-  hoursThisWeek: 4.2,
-  joined: "March 2025",
-  interests: ["Machine Learning", "Full-Stack", "Learning Science", "System Design"],
+  hoursThisWeek: 0,
+  joined: "November 2026",
+  interests: ["Learning Science", "Problem Solving"],
 };
 
 export const slugify = (s: string) =>

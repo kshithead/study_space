@@ -3,7 +3,6 @@ import { Bot, FileText, History, Plus, Send, Sparkles, Trash2, User, Zap } from 
 import {
   suggestedPrompts,
   tutorModes,
-  user as mockUser,
 } from "@/data/mockData";
 import type { ChatSession, TutorMode } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
@@ -126,8 +125,7 @@ function RichContent({ content }: { content: string }) {
 const streamInterval = 24;
 
 export default function AiTutor() {
-  const { chatSessions, upsertChatSession, deleteChatSession, user: currentUser } = useAppState();
-  const user = currentUser ?? mockUser;
+  const { chatSessions, upsertChatSession, deleteChatSession, user } = useAppState();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<TutorMode>("Socratic Mentor");
   const [model, setModel] = useState("tutor");

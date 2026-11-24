@@ -42,21 +42,6 @@ os.makedirs(DB_DIR, exist_ok=True)
 # Mount uploads directory for static access (profile pictures, materials)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# Seed default demo student if not present
-def seed_demo_user():
-    demo_email = "alex.carter@studyspace.app"
-    if not database.get_user_by_email(demo_email):
-        database.create_user(
-            user_id="usr_demo_alex",
-            email=demo_email,
-            hashed_password=hash_password("studyspace2026"),
-            full_name="Alex Carter",
-            avatar=database.DEFAULT_AVATAR,
-            auth_provider="local",
-            learning_track="Artificial Intelligence & ML"
-        )
-seed_demo_user()
-
 # Use Chroma client without default ONNX embedding function to prevent slow 80MB downloads
 chroma_client = chromadb.PersistentClient(path=DB_DIR)
 collection = chroma_client.get_or_create_collection(

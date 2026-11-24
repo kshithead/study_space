@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Tv,
   Zap,
+  LogIn,
 } from "lucide-react";
 import {
   aiQuickActions,
@@ -21,7 +22,6 @@ import {
   learningPaths,
   slugify,
   trendingTopics,
-  user as mockUser,
 } from "@/data/mockData";
 import type { Course } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
@@ -46,8 +46,7 @@ function greeting() {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { completed, courseProgress, isEnrolled, user: currentUser } = useAppState();
-  const user = currentUser ?? mockUser;
+  const { completed, courseProgress, isEnrolled, user, isAuthenticated } = useAppState();
 
   const inProgress = allCourses
     .filter((c) => isEnrolled(c.id) && courseProgress(c.id) < 100)
@@ -65,7 +64,7 @@ export default function Home() {
   };
 
   const goalPct = Math.round(
-    Math.min(100, (user.hoursThisWeek / user.weeklyGoalHours) * 100),
+    Math.min(100, ((user.hoursThisWeek || 0) / (user.weeklyGoalHours || 6)) * 100),
   );
 
   return (
@@ -80,18 +79,29 @@ export default function Home() {
           })}
         </p>
         <h1 className="mt-1 text-2xl font-bold sm:text-3xl" data-testid="home-greeting">
-          {greeting()}, {user.firstName} — ready to level up?
+          {greeting()}{isAuthenticated ? `, ${user.firstName}` : ""} — ready to level up?
         </h1>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-orange-300">
-            <Flame className="size-3.5" /> {user.streak}-day streak
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-violet-300">
-            <Zap className="size-3.5" /> {user.hoursThisWeek}h / {user.weeklyGoalHours}h this week
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-blue-300">
-            Level {user.level} · {user.levelName}
-          </span>
+          {isAuthenticated ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-orange-300">
+                <Flame className="size-3.5" /> {user.streak}-day streak
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-violet-300">
+                <Zap className="size-3.5" /> {user.hoursThisWeek}h / {user.weeklyGoalHours}h this week
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1f1d2b] px-3 py-1.5 text-xs font-semibold text-blue-300">
+                Level {user.level} · {user.levelName}
+              </span>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 rounded-full border border-violet-500/40 bg-violet-600/15 px-3.5 py-1.5 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-600/25 active:scale-95"
+            >
+              <LogIn className="size-3.5 text-violet-400" /> Sign in to start tracking your streak, XP, and weekly goals
+            </Link>
+          )}
         </div>
       </section>
 

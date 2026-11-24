@@ -22,7 +22,6 @@ import {
   allCourses,
   decks,
   materials,
-  user as mockUser,
 } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
 import { DEFAULT_NEUTRAL_AVATAR } from "@/services/auth";
@@ -96,14 +95,13 @@ export default function Navbar() {
     setMobileNavOpen,
     notificationsRead,
     markNotificationsRead,
-    user: currentUser,
+    user,
     isAuthenticated,
     logout,
     enrolledCourses,
     quizScores,
   } = useAppState();
-  const user = currentUser ?? mockUser;
-  const userId = currentUser?.id || "guest";
+  const userId = isAuthenticated ? user.id : "guest";
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -481,12 +479,22 @@ export default function Navbar() {
             </PopoverContent>
           </Popover>
 
+          {/* Unauthenticated: Clean Sign In button */}
+          {!isAuthenticated && (
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-violet-600 to-blue-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
+            >
+              <LogIn className="size-3.5" /> Sign In
+            </Link>
+          )}
+
           {/* Direct Profile navigation icon */}
           <Link
             to="/profile"
             data-testid="user-profile-menu-trigger"
             aria-label="Student Profile"
-            title={`View profile for ${user.name || "Student"}`}
+            title={isAuthenticated ? `View profile for ${user.name}` : "View Guest Profile"}
             className="group relative flex items-center gap-2 rounded-full p-1 transition-all hover:bg-white/5 hover:ring-2 hover:ring-violet-500/50 focus:outline-none active:scale-95"
           >
             <div className="relative">
@@ -505,9 +513,11 @@ export default function Navbar() {
                 />
               )}
             </div>
-            <span className="hidden pr-1.5 text-xs font-semibold text-zinc-200 group-hover:text-violet-300 sm:inline-block">
-              {user.firstName || "Profile"}
-            </span>
+            {isAuthenticated && (
+              <span className="hidden pr-1.5 text-xs font-semibold text-zinc-200 group-hover:text-violet-300 sm:inline-block">
+                {user.firstName || "Profile"}
+              </span>
+            )}
           </Link>
         </div>
       </div>

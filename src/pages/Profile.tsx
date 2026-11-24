@@ -462,9 +462,15 @@ export default function Profile() {
 
           {/* Metadata Chips */}
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5 text-zinc-300">
-              <Mail className="size-3.5 text-violet-400" /> {user.email || "student@studyspace.app"}
-            </span>
+            {user.email ? (
+              <span className="inline-flex items-center gap-1.5 text-zinc-300">
+                <Mail className="size-3.5 text-violet-400" /> {user.email}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                <Mail className="size-3.5 text-zinc-500" /> Not signed in
+              </span>
+            )}
             <span>Account created: {user.joined || "November 2026"}</span>
             <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-emerald-400">
               {isAuthenticated ? "Database Verified Account" : "Guest Session"}

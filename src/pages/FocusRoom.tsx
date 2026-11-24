@@ -16,7 +16,6 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { user as mockUser } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
 import { ambientAudio } from "@/lib/ambientAudio";
 import { toast } from "sonner";
@@ -41,7 +40,7 @@ const R = 130;
 const CIRC = 2 * Math.PI * R;
 
 export default function FocusRoom() {
-  const { pomodorosToday, incrementPomodoros, focusTasks, addFocusTask, toggleFocusTask, removeFocusTask } =
+  const { pomodorosToday, incrementPomodoros, focusTasks, addFocusTask, toggleFocusTask, removeFocusTask, user } =
     useAppState();
   const [mode, setMode] = useState<Mode>("focus");
   const [remaining, setRemaining] = useState(modeSpecs.focus.seconds);
@@ -208,7 +207,7 @@ export default function FocusRoom() {
               </div>
               <div className="rounded-2xl border border-[#27272a] bg-card p-4 text-center">
                 <p className="font-heading text-2xl font-bold text-orange-300">
-                  {mockUser.streak}
+                  {user.streak || 0}
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">day streak</p>
               </div>

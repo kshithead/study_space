@@ -92,46 +92,24 @@ function mapSupabaseUser(row: any): UserProfile {
 }
 
 // ── Persistent Browser Database Fallback Layer ─────────────────────────────────
-const SEED_ACCOUNTS: StoredAccount[] = [
-  {
-    id: "usr_demo_alex",
-    email: "alex.carter@studyspace.app",
-    password: "studyspace2026",
-    name: "Alex Carter",
-    firstName: "Alex",
-    avatar: DEFAULT_NEUTRAL_AVATAR,
-    bio: "Computer Science senior specializing in AI systems and distributed learning architectures.",
-    learningTrack: "Computer Science & AI",
-    handle: "@alex.learns",
-    streak: 7,
-    level: 4,
-    levelName: "Scholar",
-    xp: 2850,
-    xpToNext: 4000,
-    weeklyGoalHours: 6,
-    hoursThisWeek: 4.5,
-    joined: "March 2026",
-    interests: ["Computer Science & AI", "Machine Learning", "FastAPI"],
-    authProvider: "local",
-    createdAt: new Date().toISOString(),
-  },
-];
+const SEED_ACCOUNTS: StoredAccount[] = [];
 
 function getStoredAccounts(): StoredAccount[] {
   try {
     const raw = localStorage.getItem(LOCAL_DB_KEY);
     if (!raw) {
-      localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(SEED_ACCOUNTS));
-      return SEED_ACCOUNTS;
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(SEED_ACCOUNTS));
-      return SEED_ACCOUNTS;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
-    return parsed;
+    // Filter out any legacy demo accounts
+    return parsed.filter(
+      (a) => a.id !== "usr_demo_alex" && a.email !== "alex.carter@studyspace.app"
+    );
   } catch {
-    return SEED_ACCOUNTS;
+    return [];
   }
 }
 

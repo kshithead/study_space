@@ -4,8 +4,6 @@ import {
   bookmarkSeed,
   completedSeed,
   quizScoreSeed,
-  seedChatSessions,
-  user as defaultUser,
 } from "@/data/mockData";
 import type { ChatSession } from "@/data/mockData";
 import { usePersistentState } from "@/hooks/usePersistentState";
@@ -19,47 +17,49 @@ import {
 
 export type { UserProfile };
 
-const defaultGuestUser: UserProfile = {
+export const defaultGuestUser: UserProfile = {
   id: "guest",
-  email: "guest@studyspace.app",
-  name: "Guest Student",
+  email: "",
+  name: "Guest",
   firstName: "Guest",
   avatar: DEFAULT_NEUTRAL_AVATAR,
   bio: "Welcome to StudySpace! Sign in to track your learning journey.",
   learningTrack: "General Studies",
-  handle: "@guest.learner",
-  streak: 1,
+  handle: "@learner",
+  streak: 0,
   level: 1,
   levelName: "Explorer",
-  xp: 150,
+  xp: 0,
   xpToNext: 1000,
   weeklyGoalHours: 6,
-  hoursThisWeek: 1.5,
+  hoursThisWeek: 0,
   joined: "November 2026",
-  interests: ["General Studies", "Learning Science", "Problem Solving"],
+  interests: ["Learning Science", "Problem Solving"],
   authProvider: "local",
 };
 
 export function normalizeUser(u: any): UserProfile {
-  if (!u) return defaultGuestUser;
+  if (!u || u.id === "guest" || u.id === "usr_demo_alex" || u.email === "alex.carter@studyspace.app") {
+    return defaultGuestUser;
+  }
   const name = u.name || u.full_name || "Student";
   const firstName = u.firstName || (name ? name.split(" ")[0] : "Student");
   return {
     id: String(u.id || "usr_student"),
-    email: u.email || "student@studyspace.app",
+    email: u.email || "",
     name,
     firstName,
     avatar: u.avatar && u.avatar.trim() ? u.avatar : DEFAULT_NEUTRAL_AVATAR,
     bio: u.bio || "",
     learningTrack: u.learningTrack || u.learning_track || "General Studies",
     handle: u.handle || `@${firstName.toLowerCase()}.learns`,
-    streak: typeof u.streak === "number" ? u.streak : 1,
+    streak: typeof u.streak === "number" ? u.streak : 0,
     level: typeof u.level === "number" ? u.level : 1,
     levelName: u.levelName || u.level_name || "Explorer",
-    xp: typeof u.xp === "number" ? u.xp : 150,
+    xp: typeof u.xp === "number" ? u.xp : 0,
     xpToNext: typeof u.xpToNext === "number" ? u.xpToNext : 1000,
     weeklyGoalHours: typeof u.weeklyGoalHours === "number" ? u.weeklyGoalHours : 6,
-    hoursThisWeek: typeof u.hoursThisWeek === "number" ? u.hoursThisWeek : 2.5,
+    hoursThisWeek: typeof u.hoursThisWeek === "number" ? u.hoursThisWeek : 0,
     joined: u.joined || "November 2026",
     interests:
       Array.isArray(u.interests) && u.interests.length > 0
@@ -89,22 +89,6 @@ export interface UserProgressData {
   focusTasks: FocusTask[];
 }
 
-const DEMO_PROGRESS: UserProgressData = {
-  enrolledCourses: ["c-python", "c1", "c2", "c3", "c9", "c10"],
-  completed: completedSeed,
-  bookmarks: bookmarkSeed,
-  quizScores: quizScoreSeed,
-  notes: {
-    "c1-m2-l2":
-      "Remember: local sensitivities propagate backwards — check the ledger analogy before the lab.",
-  },
-  focusTasks: [
-    { id: "ft1", text: "Finish 'Computational Graphs' lesson", done: false },
-    { id: "ft2", text: "Review 15 AI flashcards", done: true },
-    { id: "ft3", text: "Draft flashcards for optimizer chapter", done: false },
-  ],
-};
-
 const BLANK_PROGRESS: UserProgressData = {
   enrolledCourses: [],
   completed: {},
@@ -125,8 +109,8 @@ function getUserChatKey(userId?: string): string {
   return `ss.chats_v2.${userId || "guest"}`;
 }
 
-function loadUserChatSessions(userId?: string, email?: string): ChatSession[] {
-  const isDemo = userId === "usr_demo_alex" || email === "alex.carter@studyspace.app";
+function loadUserChatSessions(userId?: string, _email?: string): ChatSession[] {
+  if (!userId || userId === "guest") return [];
   const key = getUserChatKey(userId);
   try {
     const raw = localStorage.getItem(key);
@@ -136,8 +120,7 @@ function loadUserChatSessions(userId?: string, email?: string): ChatSession[] {
   } catch (e) {
     console.error("Failed to parse chats for user", userId, e);
   }
-  // Only the preloaded demo account gets sample conversations; any real user starts with their own fresh history
-  return isDemo ? seedChatSessions : [];
+  return [];
 }
 
 function getUserPomodoroKey(userId?: string): string {
@@ -158,8 +141,8 @@ function loadUserPomodoro(userId?: string): { date: string; count: number } {
   return { date: todayKey(), count: 0 };
 }
 
-function loadUserProgress(userId?: string, email?: string): UserProgressData {
-  const isDemo = userId === "usr_demo_alex" || email === "alex.carter@studyspace.app";
+function loadUserProgress(userId?: string, _email?: string): UserProgressData {
+  if (!userId || userId === "guest") return BLANK_PROGRESS;
   const key = getUserProgressKey(userId);
   try {
     const raw = localStorage.getItem(key);
@@ -169,8 +152,7 @@ function loadUserProgress(userId?: string, email?: string): UserProgressData {
   } catch (e) {
     console.error("Failed to parse progress for user", userId, e);
   }
-  // Demo student receives pre-populated curriculum; all other accounts start fresh at 0%
-  return isDemo ? DEMO_PROGRESS : BLANK_PROGRESS;
+  return BLANK_PROGRESS;
 }
 
 interface AppStateValue {
@@ -223,8 +205,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     "ss.mobileNav.open",
     false,
   );
-  // Authenticated user state
-  const [storedUser, setStoredUser] = usePersistentState<any>("ss.user", defaultUser);
+  // Authenticated user state - defaults to null for clean guest session
+  const [storedUser, setStoredUser] = usePersistentState<any>("ss.user", null);
   const [user, setUserState] = useState<UserProfile>(() => normalizeUser(storedUser));
 
   // User-scoped AI chat sessions (strictly isolated per user account)
@@ -247,10 +229,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     loadUserProgress(user.id, user.email)
   );
 
-  // Sync storedUser changes
+  // Sync storedUser changes & immediately purge legacy demo account
   useEffect(() => {
+    if (
+      storedUser &&
+      (storedUser.id === "usr_demo_alex" || storedUser.email === "alex.carter@studyspace.app")
+    ) {
+      setStoredUser(null);
+      try {
+        localStorage.removeItem("ss.user");
+      } catch {}
+      setUserState(defaultGuestUser);
+      return;
+    }
     setUserState(normalizeUser(storedUser));
-  }, [storedUser]);
+  }, [storedUser, setStoredUser]);
 
   // When active user ID or email changes, switch immediately to their isolated progress, chats, and pomodoros
   useEffect(() => {
@@ -300,7 +293,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [setStoredUser]);
 
   const isAuthenticated = useMemo(() => {
-    return Boolean(authStorage.getToken() && user && user.id !== "guest");
+    return Boolean(
+      authStorage.getToken() &&
+        user &&
+        user.id !== "guest" &&
+        user.id !== "usr_demo_alex"
+    );
   }, [user]);
 
   const login = useCallback(

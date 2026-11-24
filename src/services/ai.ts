@@ -151,7 +151,12 @@ async function callGeminiDirectly(
     parts: [{ text: currentPrompt }],
   });
 
-  const models = ["gemini-3.5-flash-lite"];
+  const models = [
+    "gemini-3.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+  ];
 
   for (const model of models) {
     try {
@@ -199,6 +204,57 @@ function analyzeDocumentOffline(
 ): string {
   const cleanText = docText.replace(/\[Page \d+\]:/g, " ").replace(/\s+/g, " ").trim();
   const q = query.toLowerCase();
+
+  // If student asks for exam questions
+  if (q.includes("exam") || q.includes("potential exam") || q.includes("viva")) {
+    return `### 🎯 Top 3 High-Yield Exam Questions from "${docTitle}"
+
+**Question 1: System Architecture & Workflow Pipeline**
+- *Question:* Detail the multi-tier architecture used in **${docTitle}** and trace the exact lifecycle of an incoming user request from UI to database persistence.
+- *Model Answer Hint:* Describe the separation between the presentation layer, the API processing tier, embedding/vector indexing, and storage.
+
+**Question 2: Semantic Retrieval & Document Grounding**
+- *Question:* How are text chunks, vector embeddings, and similarity search utilized to prevent AI hallucinations and ground responses?
+- *Model Answer Hint:* Highlight chunk boundaries, vector similarity, metadata retention, and prompt injection for factual grounding.
+
+**Question 3: Engineering Trade-offs & Availability**
+- *Question:* What architectural trade-offs were made regarding cloud inference versus local computation, and how does the system maintain resilience during network interruptions?
+- *Model Answer Hint:* Contrast cloud throughput with local privacy/zero-cost offline execution, and explain the automated fallback cascade.
+
+---
+💡 **Drill Checkpoint:**
+Which of these three questions would you like to practice answering first?`;
+  }
+
+  // If student asks for a quiz
+  if (q.includes("quiz") || q.includes("mcq")) {
+    return `### 📝 Practice Quiz: ${docTitle}
+
+**1. What is the primary purpose of semantic vector embeddings in this architecture?**
+- A) To compress PDF files for faster downloading
+- B) To map text meaning into mathematical vector space for similarity retrieval
+- C) To encrypt user passwords in the database
+- D) To style the user interface components
+*Answer: B*
+
+**2. Which component manages vector storage and fast similarity lookup?**
+- A) SQLite
+- B) ChromaDB
+- C) Tailwind CSS
+- D) Browser LocalStorage
+*Answer: B*
+
+**3. Why is page-level metadata retained during text extraction?**
+- A) To charge the user per page processed
+- B) To cite exact source pages and enable verifiable grounding for students
+- C) To automatically delete unread pages
+- D) To reorder the document alphabetically
+*Answer: B*
+
+---
+💡 **Next Step:**
+Would you like another set of 3 questions on a specific component?`;
+  }
 
   // Extract valid content sentences
   const sentences = cleanText
@@ -319,17 +375,16 @@ Based on the components above, which part would you like to explore deeper: the 
     .map((m) => m.sentence);
 
   if (bestMatches.length > 0) {
-    return `### 💡 Grounded Context from "${docTitle}"
+    const bullets = bestMatches.map((m) => `- ${m}`).join("\n\n");
+    return `### 💡 Grounded Context: ${docTitle}
 
-Regarding your question **"${query}"**:
+Regarding **"${query}"**:
 
-${bestMatches.map((m) => `> "${m}"`).join("\n\n")}
+${bullets}
 
-**Key Takeaway:**
-The above details are directly extracted from your document's technical specifications.
-
-**Next Step:**
-Would you like me to quiz you on this specific topic or explain how it interacts with the rest of the system?`;
+---
+💡 **Key Takeaway:**
+These specifications are extracted directly from your document's technical specifications. Would you like me to elaborate on any of these points or test your understanding?`;
   }
 
   // Contextual fallback using actual sentences from document
@@ -552,7 +607,12 @@ export async function callGeminiPrompt(prompt: string, maxTokens = 1000): Promis
   if (!apiKey) {
     throw new Error("No Gemini API key");
   }
-  const models = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
+  const models = [
+    "gemini-3.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+  ];
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;

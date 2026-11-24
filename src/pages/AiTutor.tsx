@@ -320,6 +320,7 @@ export default function AiTutor() {
         docId: locationState?.docId,
         documentTitle: docTitle,
         documentText: docText,
+        selectedModel: model,
         history: base.messages.map((m) => ({
           id: m.id,
           role: m.role,
@@ -477,7 +478,12 @@ export default function AiTutor() {
           <div className="min-w-0">
             <p className="truncate font-heading text-sm font-semibold">Socrates — AI Tutor</p>
             <p className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" /> Google Gemini 3.5 AI
+              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {model === "groq-120b"
+                ? "Groq Cloud 120B AI"
+                : model === "groq-qwen"
+                ? "Groq Cloud Qwen AI"
+                : "Google Gemini Cloud AI"}
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -494,14 +500,19 @@ export default function AiTutor() {
               </SelectContent>
             </Select>
             <Select value={model} onValueChange={(v: string) => setModel(v)}>
-              <SelectTrigger data-testid="ai-tutor-model-select" size="sm" className="hidden w-44 border-[#2e2e33] bg-[#181818] text-xs sm:flex">
+              <SelectTrigger data-testid="ai-tutor-model-select" size="sm" className="hidden w-56 border-[#2e2e33] bg-[#181818] text-xs sm:flex">
                 <SelectValue>
-                  {(v: string | null) => (v === "research" ? "Gemini 3.8 Flash (Deep)" : "Gemini 3.5 Flash")}
+                  {(v: string | null) => {
+                    if (v === "groq-120b") return "⚡ Groq 120B (Ultra-fast)";
+                    if (v === "groq-qwen") return "🚀 Groq Qwen 27B (Instant)";
+                    return "✨ Google Gemini 3.5";
+                  }}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="border-[#2e2e33] bg-popover">
-                <SelectItem value="tutor">Gemini 3.5 Flash</SelectItem>
-                <SelectItem value="research">Gemini 3.8 Flash (Deep)</SelectItem>
+                <SelectItem value="tutor">✨ Google Gemini 3.5 Flash</SelectItem>
+                <SelectItem value="groq-120b">⚡ Groq GPT-OSS 120B (Ultra-fast)</SelectItem>
+                <SelectItem value="groq-qwen">🚀 Groq Qwen 27B (Instant 120ms)</SelectItem>
               </SelectContent>
             </Select>
           </div>

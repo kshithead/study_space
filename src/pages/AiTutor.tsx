@@ -8,6 +8,7 @@ import {
 import type { ChatSession, TutorMode } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
 import { generateTutorReply } from "@/services/ai";
+import { extractPdfText, getCachedPdfText } from "@/lib/pdfTextExtractor";
 import {
   Select,
   SelectContent,
@@ -139,6 +140,8 @@ export default function AiTutor() {
   const [model, setModel] = useState("tutor");
   const [input, setInput] = useState("");
   const [streamText, setStreamText] = useState<string | null>(null);
+  const [extractedDocText, setExtractedDocText] = useState<string>("");
+  const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Automatically start or select grounded document chat if navigated from Study Materials
@@ -168,14 +171,60 @@ export default function AiTutor() {
         };
         upsertChatSession(newSession);
         setActiveId(sessionId);
-        toast.success(`Document loaded into AI Tutor!`, {
-          description: `Socrates is ready to tutor you on "${docTitle}".`,
-        });
       }
     }
   }, [locationState?.documentTitle]);
 
+  // Extract PDF text for grounding whenever documentUrl or active document changes
+  useEffect(() => {
+    const docUrl = locationState?.documentUrl;
+    const docTitle = locationState?.documentTitle;
+
+    // Check cache first
+    const cached =
+      (docTitle ? getCachedPdfText(docTitle) : "") ||
+      (docUrl ? getCachedPdfText(docUrl) : "");
+
+    if (cached) {
+      setExtractedDocText(cached);
+      return;
+    }
+
+    if (docUrl) {
+      setIsExtracting(true);
+      extractPdfText(docUrl)
+        .then((text) => {
+          if (text) {
+            setExtractedDocText(text);
+            if (docTitle) {
+              try {
+                sessionStorage.setItem(`ss.pdfText.${encodeURIComponent(docTitle)}`, text.slice(0, 40000));
+              } catch {}
+            }
+            toast.success(`Indexed "${docTitle || "Document"}" for AI Tutoring!`, {
+              description: `${text.length.toLocaleString()} characters extracted and grounded.`,
+            });
+          }
+        })
+        .catch((err) => console.warn("Failed to extract PDF text:", err))
+        .finally(() => setIsExtracting(false));
+    }
+  }, [locationState?.documentUrl, locationState?.documentTitle]);
+
   const active = chatSessions.find((s) => s.id === activeId) ?? null;
+
+  // Sync extracted text when switching to an existing Study session
+  useEffect(() => {
+    if (active?.title.startsWith("Study: ")) {
+      const docTitle = active.title.replace("Study: ", "");
+      if (!extractedDocText) {
+        const cached = getCachedPdfText(docTitle) || (locationState?.documentUrl ? getCachedPdfText(locationState.documentUrl) : "");
+        if (cached) {
+          setExtractedDocText(cached);
+        }
+      }
+    }
+  }, [active?.title, extractedDocText, locationState?.documentUrl]);
   const sortedSessions = useMemo(
     () => [...chatSessions].sort((a, b) => b.updatedAt - a.updatedAt),
     [chatSessions],
@@ -218,6 +267,9 @@ export default function AiTutor() {
 
     const isDocSession = base.title.startsWith("Study: ");
     const docTitle = isDocSession ? base.title.replace("Study: ", "") : undefined;
+    const docText = isDocSession
+      ? (extractedDocText || (docTitle ? getCachedPdfText(docTitle) : "") || (locationState?.documentUrl ? getCachedPdfText(locationState.documentUrl) : ""))
+      : undefined;
 
     try {
       const result = await generateTutorReply({
@@ -225,6 +277,7 @@ export default function AiTutor() {
         mode,
         docId: locationState?.docId,
         documentTitle: docTitle,
+        documentText: docText,
         history: base.messages.map((m) => ({
           id: m.id,
           role: m.role,
@@ -416,10 +469,19 @@ export default function AiTutor() {
           <div className="flex items-center justify-between border-b border-emerald-500/25 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-300">
             <span className="flex items-center gap-2 font-medium">
               <FileText className="size-3.5 text-emerald-400" />
-              <span>Grounded Document: <strong className="text-white">{active.title.replace("Study: ", "")}</strong></span>
+              <span>
+                Grounded Document: <strong className="text-white">{active.title.replace("Study: ", "")}</strong>
+              </span>
+              {isExtracting ? (
+                <span className="text-[11px] text-amber-300 animate-pulse">(Reading PDF text...)</span>
+              ) : extractedDocText ? (
+                <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300 font-mono">
+                  {Math.round(extractedDocText.length / 1000)}k chars indexed
+                </span>
+              ) : null}
             </span>
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-              RAG Grounding Active
+              {extractedDocText ? "Deep Text Grounding Active" : "RAG Grounding Active"}
             </span>
           </div>
         )}
@@ -565,18 +627,38 @@ export default function AiTutor() {
             >
               <input
                 type="file"
+                accept=".pdf,application/pdf"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (f) {
-                    toast.success(`Attached "${f.name}"`, {
-                      description: "Asking Socrates to summarize and tutor from this document.",
-                    });
-                    setInput((prev) =>
-                      prev
-                        ? `${prev}\n\n[Attached notes from "${f.name}"]: please summarize and explain the key ideas.`
-                        : `I have notes from "${f.name}". Can you explain the main concepts and quiz me on them?`
-                    );
+                    toast.info(`Extracting text from "${f.name}"...`);
+                    try {
+                      const text = await extractPdfText(f);
+                      if (text) {
+                        setExtractedDocText(text);
+                        try {
+                          sessionStorage.setItem(`ss.pdfText.${encodeURIComponent(f.name)}`, text.slice(0, 40000));
+                        } catch {}
+                        toast.success(`Attached & Indexed "${f.name}"`, {
+                          description: `${text.length.toLocaleString()} characters indexed for Socrates.`,
+                        });
+                        setInput((prev) =>
+                          prev
+                            ? `${prev}\n\nCan you give me an overview and explain "${f.name}"?`
+                            : `I've uploaded "${f.name}". Can you give me a structured overview and explain its core architecture and concepts?`
+                        );
+                      } else {
+                        toast.success(`Attached "${f.name}"`);
+                        setInput((prev) =>
+                          prev
+                            ? `${prev}\n\n[Attached notes from "${f.name}"]`
+                            : `Can you explain the main concepts from "${f.name}"?`
+                        );
+                      }
+                    } catch {
+                      toast.success(`Attached "${f.name}"`);
+                    }
                   }
                   e.target.value = "";
                 }}

@@ -588,14 +588,30 @@ export default function AiTutor() {
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between border-b border-violet-500/20 bg-violet-950/15 px-4 py-1.5 text-xs text-violet-300">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-violet-500/20 bg-violet-950/15 px-4 py-1.5 text-xs text-violet-300">
             <span className="flex items-center gap-1.5 font-medium">
               <Sparkles className="size-3.5 text-violet-400" />
-              <span>General Academic AI Tutoring Mode</span>
+              <span>General Academic AI Mode (Freeform Chat)</span>
             </span>
-            <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
-              Freeform AI Chat
-            </span>
+            <div className="flex items-center gap-2">
+              {chatSessions.find((s) => s.title.startsWith("Study: ")) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const docSession = chatSessions.find((s) => s.title.startsWith("Study: "));
+                    if (docSession) setActiveId(docSession.id);
+                  }}
+                  className="flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-950/40 px-2.5 py-1 text-[11px] font-medium text-emerald-300 transition-colors hover:bg-emerald-900/50 hover:text-white"
+                  title="Switch to your uploaded PDF study session to use Document Only or Doc + General AI grounding"
+                >
+                  <FileText className="size-3 text-emerald-400" />
+                  <span>Switch to Grounded Document Chat ➔</span>
+                </button>
+              ) : null}
+              <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+                General AI (No Doc Attached)
+              </span>
+            </div>
           </div>
         )}
 

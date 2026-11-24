@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Download,
@@ -10,6 +11,7 @@ import {
   Loader2,
   Cloud,
   ExternalLink,
+  MessageSquare,
 } from "lucide-react";
 import { materialTypeLabels, materials as mockMaterials } from "@/data/mockData";
 import type { Material, MaterialType } from "@/data/mockData";
@@ -39,6 +41,7 @@ const typeIcons: Record<MaterialType, typeof FileText> = {
 };
 
 export default function StudyMaterials() {
+  const navigate = useNavigate();
   const { user } = useAppState();
   const [filter, setFilter] = useState<MaterialType | "all" | "uploads">("all");
   const [preview, setPreview] = useState<DisplayMaterial | null>(null);
@@ -330,7 +333,7 @@ export default function StudyMaterials() {
                   <BookOpen className="size-3" />
                   {m.course} · {m.readTime} · {m.updated}
                 </p>
-                <div className="mt-3.5 flex gap-2">
+                <div className="mt-3.5 flex items-center gap-2">
                   <button
                     type="button"
                     data-testid={`material-open-${m.id}`}
@@ -343,6 +346,29 @@ export default function StudyMaterials() {
                     )}
                   >
                     Read
+                  </button>
+                  <button
+                    type="button"
+                    data-testid={`material-ask-ai-${m.id}`}
+                    title={`Ask Socrates AI about ${m.title}`}
+                    onClick={() =>
+                      navigate("/ai-tutor", {
+                        state: {
+                          documentTitle: m.title,
+                          documentUrl: m.url,
+                          docId: m.id,
+                        },
+                      })
+                    }
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-semibold transition-all active:scale-95",
+                      m.isUploaded
+                        ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-500/20"
+                        : "border-violet-600/40 bg-violet-600/15 text-violet-200 hover:bg-violet-600/25"
+                    )}
+                  >
+                    <Sparkles className="size-3.5 text-emerald-400" />
+                    <span>Ask AI</span>
                   </button>
                   <button
                     type="button"
@@ -392,18 +418,37 @@ export default function StudyMaterials() {
           {preview ? (
             <>
               <DialogHeader>
-                <DialogTitle className="font-heading pr-6 flex items-center justify-between gap-3">
+                <DialogTitle className="font-heading pr-6 flex flex-wrap items-center justify-between gap-3">
                   <span>{preview.title}</span>
-                  {preview.url && (
-                    <a
-                      href={preview.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 transition-colors"
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = preview;
+                        setPreview(null);
+                        navigate("/ai-tutor", {
+                          state: {
+                            documentTitle: target.title,
+                            documentUrl: target.url,
+                            docId: target.id,
+                          },
+                        });
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-500/50 bg-violet-600/25 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-600/40 transition-colors"
                     >
-                      <ExternalLink className="size-3.5" /> Open in New Tab
-                    </a>
-                  )}
+                      <Sparkles className="size-3.5 text-violet-300" /> Ask AI Tutor
+                    </button>
+                    {preview.url && (
+                      <a
+                        href={preview.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/25 transition-colors"
+                      >
+                        <ExternalLink className="size-3.5" /> Open in New Tab
+                      </a>
+                    )}
+                  </div>
                 </DialogTitle>
                 <DialogDescription>
                   {preview.isUploaded ? "Uploaded PDF" : materialTypeLabels[preview.type as MaterialType]} · {preview.course} · {preview.readTime}

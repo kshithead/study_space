@@ -89,13 +89,17 @@ function getModeSystemPrompt(mode: TutorMode): string {
 async function callGeminiDirectly(
   query: string,
   mode: TutorMode,
-  history: ChatMessage[]
+  history: ChatMessage[],
+  documentTitle?: string
 ): Promise<string> {
   if (!GEMINI_API_KEY) {
     throw new Error("No VITE_GEMINI_API_KEY configured in environment");
   }
 
   const systemInstruction = getModeSystemPrompt(mode);
+  const docGrounding = documentTitle
+    ? `\n\n[DOCUMENT GROUNDING CONTEXT]: The student is specifically studying and asking questions about their uploaded study material: "${documentTitle}". Ground your explanations, key definitions, summaries, and analogies around this document's subject matter.`
+    : "";
 
   // Build multi-turn conversational contents
   const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
@@ -111,7 +115,7 @@ async function callGeminiDirectly(
   }
 
   // Add latest query with system instruction context
-  const currentPrompt = `${systemInstruction}\n\nStudent says: "${query}"`;
+  const currentPrompt = `${systemInstruction}${docGrounding}\n\nStudent says: "${query}"`;
   contents.push({
     role: "user",
     parts: [{ text: currentPrompt }],
@@ -258,8 +262,9 @@ export async function generateTutorReply(params: {
   mode: TutorMode;
   history: ChatMessage[];
   docId?: string;
+  documentTitle?: string;
 }): Promise<TutorResponse> {
-  const { query, mode, history, docId } = params;
+  const { query, mode, history, docId, documentTitle } = params;
   const apiBase = getApiBase();
 
   // 1. Try FastAPI backend (RAG + ChromaDB + Gemini Server)
@@ -302,14 +307,15 @@ export async function generateTutorReply(params: {
     }
   }
 
-  // 2. Direct Cloud Gemini API (Client-side live generation)
+  // 2. Direct Cloud Gemini API (Client-side live generation with Document Grounding)
   try {
-    const cloudAnswer = await callGeminiDirectly(query, mode, history);
+    const cloudAnswer = await callGeminiDirectly(query, mode, history, documentTitle);
     return {
       answer: cloudAnswer,
       provider: "Google Gemini Cloud AI (gemini-3.5-flash-lite)",
       mode: "cloud",
-      grounded: false,
+      grounded: Boolean(documentTitle),
+      sources: documentTitle ? [{ title: documentTitle, page: 1, filename: documentTitle }] : [],
     };
   } catch (cloudErr) {
     console.warn("Direct Gemini call fell back to dynamic offline engine:", cloudErr);

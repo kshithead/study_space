@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Bot, FileText, History, Plus, Send, Sparkles, Trash2, User, Zap } from "lucide-react";
 import {
   suggestedPrompts,
@@ -126,12 +127,53 @@ const streamInterval = 24;
 
 export default function AiTutor() {
   const { chatSessions, upsertChatSession, deleteChatSession, user } = useAppState();
+  const location = useLocation();
+  const locationState = location.state as {
+    documentTitle?: string;
+    documentUrl?: string;
+    docId?: string;
+  } | null;
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<TutorMode>("Socratic Mentor");
   const [model, setModel] = useState("tutor");
   const [input, setInput] = useState("");
   const [streamText, setStreamText] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Automatically start or select grounded document chat if navigated from Study Materials
+  useEffect(() => {
+    if (locationState?.documentTitle) {
+      const docTitle = locationState.documentTitle;
+      const targetSessionTitle = `Study: ${docTitle}`;
+      const existing = chatSessions.find((s) => s.title === targetSessionTitle);
+      if (existing) {
+        setActiveId(existing.id);
+      } else {
+        const now = Date.now();
+        const sessionId = `doc-chat-${now}`;
+        const newSession: ChatSession = {
+          id: sessionId,
+          title: targetSessionTitle,
+          updatedAt: now,
+          messages: [
+            {
+              id: `m-init-${now}`,
+              role: "tutor",
+              content: `Hello! I've loaded your document **"${docTitle}"**. 📄\n\nWhat would you like to explore? I can:\n- **Summarize** the main takeaways\n- **Explain** difficult sections or formulas\n- **Quiz you** to test your retention\n\nAsk me anything about this material!`,
+              mode: "Socratic Mentor",
+              at: now,
+            },
+          ],
+        };
+        upsertChatSession(newSession);
+        setActiveId(sessionId);
+        toast.success(`Document loaded into AI Tutor!`, {
+          description: `Socrates is ready to tutor you on "${docTitle}".`,
+        });
+      }
+    }
+  }, [locationState?.documentTitle]);
 
   const active = chatSessions.find((s) => s.id === activeId) ?? null;
   const sortedSessions = useMemo(
@@ -174,10 +216,15 @@ export default function AiTutor() {
     setActiveId(sessionId);
     setStreamText("Thinking with Gemini AI...");
 
+    const isDocSession = base.title.startsWith("Study: ");
+    const docTitle = isDocSession ? base.title.replace("Study: ", "") : undefined;
+
     try {
       const result = await generateTutorReply({
         query: text,
         mode,
+        docId: locationState?.docId,
+        documentTitle: docTitle,
         history: base.messages.map((m) => ({
           id: m.id,
           role: m.role,
@@ -364,6 +411,19 @@ export default function AiTutor() {
           </div>
         </div>
 
+        {/* Document grounding banner if session is linked to a document */}
+        {active?.title.startsWith("Study: ") && (
+          <div className="flex items-center justify-between border-b border-emerald-500/25 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-300">
+            <span className="flex items-center gap-2 font-medium">
+              <FileText className="size-3.5 text-emerald-400" />
+              <span>Grounded Document: <strong className="text-white">{active.title.replace("Study: ", "")}</strong></span>
+            </span>
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+              RAG Grounding Active
+            </span>
+          </div>
+        )}
+
         {/* thread */}
         <div ref={scrollRef} data-testid="ai-tutor-thread" className="flex-1 overflow-y-auto px-4 py-5">
           {messages.length === 0 ? (
@@ -455,13 +515,42 @@ export default function AiTutor() {
         <div className="border-t border-[#232327] bg-[#131316] px-4 pb-4 pt-3">
           <div className="mx-auto max-w-3xl">
             <div className="mb-2.5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-              {suggestedPrompts.map((p, i) => (
+              {(active?.title.startsWith("Study: ")
+                ? [
+                    {
+                      id: "dp1",
+                      label: "📄 Summarize document",
+                      prompt: `Can you give me a structured summary of the key takeaways from "${active.title.replace("Study: ", "")}"?`,
+                    },
+                    {
+                      id: "dp2",
+                      label: "💡 Explain key concepts",
+                      prompt: `What are the core technical concepts, equations, and definitions in "${active.title.replace("Study: ", "")}"?`,
+                    },
+                    {
+                      id: "dp3",
+                      label: "📝 Quiz me (3 MCQs)",
+                      prompt: `Create a 3-question conceptual multiple-choice quiz with explanations based on "${active.title.replace("Study: ", "")}".`,
+                    },
+                    {
+                      id: "dp4",
+                      label: "🎯 Potential exam questions",
+                      prompt: `What are the top 3 exam questions likely to be asked from "${active.title.replace("Study: ", "")}"?`,
+                    },
+                  ]
+                : suggestedPrompts
+              ).map((p, i) => (
                 <button
                   key={p.id}
                   type="button"
                   data-testid={`ai-tutor-suggested-chip-${i}`}
                   onClick={() => send(p.prompt)}
-                  className="shrink-0 rounded-full border border-[#4c1d95]/50 bg-[#1c1929] px-3 py-1.5 text-xs text-zinc-300 transition-all hover:border-violet-500 hover:text-white active:scale-95"
+                  className={cn(
+                    "shrink-0 rounded-full border px-3 py-1.5 text-xs transition-all active:scale-95",
+                    active?.title.startsWith("Study: ")
+                      ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-300 hover:border-emerald-400 hover:text-white"
+                      : "border-[#4c1d95]/50 bg-[#1c1929] text-zinc-300 hover:border-violet-500 hover:text-white"
+                  )}
                 >
                   {p.label}
                 </button>

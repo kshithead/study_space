@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, FileText, History, Plus, Send, Sparkles, Trash2, User, Zap } from "lucide-react";
+import { BookOpen, Bot, FileText, Globe, History, Plus, Send, Sparkles, Trash2, User, Zap } from "lucide-react";
 import {
   suggestedPrompts,
   tutorModes,
@@ -8,6 +8,7 @@ import {
 import type { ChatSession, TutorMode } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
 import { generateTutorReply } from "@/services/ai";
+import type { GroundingScope } from "@/services/ai";
 import { extractPdfText, getCachedPdfText } from "@/lib/pdfTextExtractor";
 import { isSupabaseConfigured, listPdfsFromSupabase } from "@/lib/supabase";
 import {
@@ -139,11 +140,26 @@ export default function AiTutor() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<TutorMode>("Socratic Mentor");
   const [model, setModel] = useState("tutor");
+  const [groundingScope, setGroundingScope] = useState<GroundingScope>(() => {
+    return (localStorage.getItem("study_grounding_scope") as GroundingScope) || "doc-only";
+  });
   const [input, setInput] = useState("");
   const [streamText, setStreamText] = useState<string | null>(null);
   const [extractedDocText, setExtractedDocText] = useState<string>("");
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleSetGroundingScope = (scope: GroundingScope) => {
+    setGroundingScope(scope);
+    try {
+      localStorage.setItem("study_grounding_scope", scope);
+    } catch {}
+    toast.info(
+      scope === "doc-only"
+        ? "Switched to 'Document Only': AI will strictly use uploaded document text."
+        : "Switched to 'Doc + General AI': AI is anchored in document, but free to explain and use general knowledge."
+    );
+  };
 
   // Automatically start or select grounded document chat if navigated from Study Materials
   useEffect(() => {
@@ -305,7 +321,8 @@ export default function AiTutor() {
       messages: [...base.messages, userMsg, tutorMsg],
     });
     setActiveId(sessionId);
-    setStreamText("Thinking with Gemini AI...");
+    const isGroq = model === "groq-120b" || model === "groq-qwen";
+    setStreamText(isGroq ? "Thinking with Groq Cloud AI..." : "Thinking with Gemini AI...");
 
     const isDocSession = base.title.startsWith("Study: ");
     const docTitle = isDocSession ? base.title.replace("Study: ", "").trim() : undefined;
@@ -321,6 +338,7 @@ export default function AiTutor() {
         documentTitle: docTitle,
         documentText: docText,
         selectedModel: model,
+        groundingScope,
         history: base.messages.map((m) => ({
           id: m.id,
           role: m.role,
@@ -520,7 +538,7 @@ export default function AiTutor() {
 
         {/* Document grounding banner or general chat indicator */}
         {active?.title.startsWith("Study: ") ? (
-          <div className="flex items-center justify-between border-b border-emerald-500/25 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-300">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-emerald-500/25 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-300">
             <span className="flex items-center gap-2 font-medium">
               <FileText className="size-3.5 text-emerald-400" />
               <span>
@@ -534,9 +552,40 @@ export default function AiTutor() {
                 </span>
               ) : null}
             </span>
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-              {(extractedDocText || active.docText) ? "Deep Text Grounding Active" : "RAG Grounding Active"}
-            </span>
+
+            {/* Option A: Segmented Pill Switcher (Document Only vs Doc + General AI) */}
+            <div className="flex items-center rounded-lg border border-[#2e2e33] bg-[#141418] p-0.5 text-[11px] shadow-sm">
+              <button
+                type="button"
+                data-testid="ai-tutor-mode-doc-only"
+                onClick={() => handleSetGroundingScope("doc-only")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-all active:scale-95",
+                  groundingScope === "doc-only"
+                    ? "bg-emerald-500/25 text-emerald-200 border border-emerald-500/40 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-[#1f1f25]"
+                )}
+                title="Strict Document Mode: AI answers strictly based on the text of your uploaded document without outside extrapolation."
+              >
+                <BookOpen className="size-3 text-emerald-400" />
+                <span>Document Only</span>
+              </button>
+              <button
+                type="button"
+                data-testid="ai-tutor-mode-hybrid"
+                onClick={() => handleSetGroundingScope("hybrid")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-all active:scale-95",
+                  groundingScope === "hybrid"
+                    ? "bg-violet-600/30 text-violet-200 border border-violet-500/40 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-[#1f1f25]"
+                )}
+                title="Hybrid Mode: Grounded in this document, but free to use general AI intelligence for code examples, analogies, and broader explanations."
+              >
+                <Globe className="size-3 text-violet-400" />
+                <span>Doc + General AI</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-between border-b border-violet-500/20 bg-violet-950/15 px-4 py-1.5 text-xs text-violet-300">
@@ -640,47 +689,76 @@ export default function AiTutor() {
         {/* prompt chips + input */}
         <div className="border-t border-[#232327] bg-[#131316] px-4 pb-4 pt-3">
           <div className="mx-auto max-w-3xl">
-            <div className="mb-2.5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-              {(active?.title.startsWith("Study: ")
-                ? [
-                    {
-                      id: "dp1",
-                      label: "📄 Summarize document",
-                      prompt: `Can you give me a structured summary of the key takeaways from "${active.title.replace("Study: ", "")}"?`,
-                    },
-                    {
-                      id: "dp2",
-                      label: "💡 Explain key concepts",
-                      prompt: `What are the core technical concepts, equations, and definitions in "${active.title.replace("Study: ", "")}"?`,
-                    },
-                    {
-                      id: "dp3",
-                      label: "📝 Quiz me (3 MCQs)",
-                      prompt: `Create a 3-question conceptual multiple-choice quiz with explanations based on "${active.title.replace("Study: ", "")}".`,
-                    },
-                    {
-                      id: "dp4",
-                      label: "🎯 Potential exam questions",
-                      prompt: `What are the top 3 exam questions likely to be asked from "${active.title.replace("Study: ", "")}"?`,
-                    },
-                  ]
-                : suggestedPrompts
-              ).map((p, i) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  data-testid={`ai-tutor-suggested-chip-${i}`}
-                  onClick={() => send(p.prompt)}
-                  className={cn(
-                    "shrink-0 rounded-full border px-3 py-1.5 text-xs transition-all active:scale-95",
-                    active?.title.startsWith("Study: ")
-                      ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-300 hover:border-emerald-400 hover:text-white"
-                      : "border-[#4c1d95]/50 bg-[#1c1929] text-zinc-300 hover:border-violet-500 hover:text-white"
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="mb-2.5 flex items-center justify-between gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+              <div className="flex gap-2 shrink-0">
+                {(active?.title.startsWith("Study: ")
+                  ? [
+                      {
+                        id: "dp1",
+                        label: "📄 Summarize document",
+                        prompt: `Can you give me a structured summary of the key takeaways from "${active.title.replace("Study: ", "")}"?`,
+                      },
+                      {
+                        id: "dp2",
+                        label: "💡 Explain key concepts",
+                        prompt: `What are the core technical concepts, equations, and definitions in "${active.title.replace("Study: ", "")}"?`,
+                      },
+                      {
+                        id: "dp3",
+                        label: "📝 Quiz me (3 MCQs)",
+                        prompt: `Create a 3-question conceptual multiple-choice quiz with explanations based on "${active.title.replace("Study: ", "")}".`,
+                      },
+                      {
+                        id: "dp4",
+                        label: "🎯 Potential exam questions",
+                        prompt: `What are the top 3 exam questions likely to be asked from "${active.title.replace("Study: ", "")}"?`,
+                      },
+                    ]
+                  : suggestedPrompts
+                ).map((p, i) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    data-testid={`ai-tutor-suggested-chip-${i}`}
+                    onClick={() => send(p.prompt)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1.5 text-xs transition-all active:scale-95",
+                      active?.title.startsWith("Study: ")
+                        ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-300 hover:border-emerald-400 hover:text-white"
+                        : "border-[#4c1d95]/50 bg-[#1c1929] text-zinc-300 hover:border-violet-500 hover:text-white"
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {active?.title.startsWith("Study: ") && (
+                <div className="ml-auto hidden sm:flex items-center gap-1.5 shrink-0 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleSetGroundingScope(groundingScope === "doc-only" ? "hybrid" : "doc-only")}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-95",
+                      groundingScope === "doc-only"
+                        ? "border-emerald-500/40 bg-emerald-950/40 text-emerald-300 hover:border-emerald-400"
+                        : "border-violet-500/40 bg-violet-950/40 text-violet-300 hover:border-violet-400"
+                    )}
+                    title="Click to toggle between Document Only and Doc + General AI"
+                  >
+                    {groundingScope === "doc-only" ? (
+                      <>
+                        <BookOpen className="size-3 text-emerald-400" />
+                        <span>Document Only</span>
+                      </>
+                    ) : (
+                      <>
+                        <Globe className="size-3 text-violet-400" />
+                        <span>Doc + General AI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
             <form
               onSubmit={(e) => {
@@ -749,7 +827,13 @@ export default function AiTutor() {
                   }
                 }}
                 rows={1}
-                placeholder="Ask Socrates anything — explain, summarize, or quiz me…"
+                placeholder={
+                  active?.title.startsWith("Study: ")
+                    ? groundingScope === "doc-only"
+                      ? `Ask anything strictly from "${active.title.replace("Study: ", "")}"...`
+                      : `Ask about "${active.title.replace("Study: ", "")}" or broader tech concepts...`
+                    : "Ask Socrates anything — explain, summarize, or quiz me…"
+                }
                 className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-zinc-100 outline-none placeholder:text-muted-foreground"
               />
               <button
@@ -762,7 +846,7 @@ export default function AiTutor() {
               </button>
             </form>
             <p className="mt-2 text-center text-[11px] text-zinc-500">
-              Live conversational AI powered by Google Gemini · Grounded in course concepts.
+              Live AI inference powered by {model.startsWith("groq") ? "Groq Cloud" : "Google Gemini"} · {active?.title.startsWith("Study: ") ? (groundingScope === "doc-only" ? "Strict Document Grounding" : "Hybrid Document + General AI") : "Freeform AI Learning"}.
             </p>
           </div>
         </div>

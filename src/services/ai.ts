@@ -118,6 +118,8 @@ function getModeSystemPrompt(mode: TutorMode): string {
   }
 }
 
+export type GroundingScope = "doc-only" | "hybrid";
+
 /**
  * Call Google Gemini directly from the browser when backend is offline or on Vercel
  */
@@ -126,7 +128,8 @@ async function callGeminiDirectly(
   mode: TutorMode,
   history: ChatMessage[],
   documentTitle?: string,
-  documentText?: string
+  documentText?: string,
+  groundingScope: GroundingScope = "doc-only"
 ): Promise<string> {
   const apiKey = getEffectiveGeminiApiKey();
   if (!apiKey) {
@@ -137,9 +140,17 @@ async function callGeminiDirectly(
   let docGrounding = "";
   if (documentText && documentText.trim()) {
     const cleanDocText = documentText.slice(0, 50000);
-    docGrounding = `\n\n=======================================================\nAUTHENTIC STUDY DOCUMENT CONTENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nCRITICAL INSTRUCTIONS:\n1. The student is asking questions specifically about the document above. You MUST ground your answer directly, thoroughly, and factually in the technical details, architecture, definitions, workflows, and facts from this document!\n2. When asked for technologies, features, architecture, or explanations, list them directly and comprehensively quoting exact tools, libraries, frameworks, and sections from the document!\n3. Never give vague or generic boilerplate answers.\n4. Conclude with a helpful follow-up question or concept drill.`;
+    if (groundingScope === "hybrid") {
+      docGrounding = `\n\n=======================================================\nREFERENCE STUDY DOCUMENT CONTENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nINSTRUCTIONS [MODE: HYBRID - DOCUMENT CONTEXT + GENERAL AI]:\n1. The user has selected HYBRID mode (Document Reference + General AI Intelligence).\n2. Use the document above as your foundational context for project architecture, definitions, facts, and code.\n3. You are ENCOURAGED to expand on concepts using your broader computer science, academic, and software engineering knowledge: provide intuitive analogies, explain related technologies (e.g. Firebase vs Supabase, FastAPI vs Express, microservices vs monoliths), provide code examples, and discuss industry trade-offs.\n4. Deliver a direct, structured, and insightful academic explanation.\n5. Conclude with a helpful checkpoint question.`;
+    } else {
+      docGrounding = `\n\n=======================================================\nAUTHENTIC STUDY DOCUMENT CONTENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nCRITICAL INSTRUCTIONS [MODE: STRICT DOCUMENT ONLY]:\n1. The student has set mode to STRICT DOCUMENT ONLY. You MUST ground your entire answer solely, directly, and factually in the authentic technical details, architecture, definitions, and facts from this document!\n2. Do NOT extrapolate, hallucinate, or bring in outside facts not mentioned in this text.\n3. If asked about something that is not in this document, explicitly clarify: "This topic is not covered in ${documentTitle || "the document"}."\n4. When asked for technologies, features, architecture, or explanations, list them directly and comprehensively quoting exact tools, libraries, frameworks, and sections from the document!\n5. Never give vague or generic boilerplate answers.\n6. Conclude with a helpful follow-up question or concept drill based on this document.`;
+    }
   } else if (documentTitle) {
-    docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT]: The student is specifically studying and asking questions about their uploaded study material: "${documentTitle}". Ground your explanations, key definitions, summaries, and analogies around this document's subject matter.`;
+    if (groundingScope === "hybrid") {
+      docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT - HYBRID]: The student is studying "${documentTitle}". Use this document as your reference anchor, but feel free to expand and draw upon general academic and software engineering knowledge.`;
+    } else {
+      docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT - STRICT]: The student is specifically studying "${documentTitle}". Ground your explanations strictly around this document's subject matter without outside extrapolation.`;
+    }
   }
 
   // Build multi-turn conversational contents ensuring strict user/model alternation
@@ -220,7 +231,8 @@ export async function callGroqDirectly(
   history: ChatMessage[],
   modelName = "openai/gpt-oss-120b",
   documentTitle?: string,
-  documentText?: string
+  documentText?: string,
+  groundingScope: GroundingScope = "doc-only"
 ): Promise<string> {
   const apiKey = getEffectiveGroqApiKey();
   if (!apiKey) throw new Error("No Groq API key available");
@@ -229,9 +241,17 @@ export async function callGroqDirectly(
   let docGrounding = "";
   if (documentText && documentText.trim()) {
     const cleanDocText = documentText.slice(0, 35000);
-    docGrounding = `\n\n=======================================================\nAUTHENTIC STUDY DOCUMENT CONTENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nCRITICAL INSTRUCTIONS:\n1. The student is asking questions specifically about the document above. Ground your answer directly, thoroughly, and factually in the technical details, architecture, definitions, and facts from this document.\n2. When asked for technologies or architecture, cite the exact tools, libraries, and components from the text.\n3. Conclude with a helpful follow-up drill question.`;
+    if (groundingScope === "hybrid") {
+      docGrounding = `\n\n=======================================================\nREFERENCE STUDY DOCUMENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nINSTRUCTIONS [MODE: HYBRID - DOCUMENT + GENERAL AI]:\n1. The user has chosen HYBRID mode (Document Context + General AI Intelligence).\n2. Use the document above as your anchor for technical specifications, architecture, and definitions.\n3. You are ENCOURAGED to expand on concepts using your broader computer science, academic, and software engineering knowledge: explain related technologies, give real-world analogies, code snippets, trade-offs, and industry best practices.\n4. Deliver a thorough, direct, and well-structured academic explanation.\n5. Conclude with a helpful checkpoint question.`;
+    } else {
+      docGrounding = `\n\n=======================================================\nAUTHENTIC STUDY DOCUMENT CONTENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nCRITICAL INSTRUCTIONS [MODE: STRICT DOCUMENT ONLY]:\n1. The student is asking questions specifically about the document above in STRICT DOCUMENT ONLY mode. Ground your answer solely, directly, and factually in the technical details, architecture, definitions, and facts from this document.\n2. Do NOT extrapolate or bring in outside facts not present in this document.\n3. When asked for technologies or architecture, cite the exact tools, libraries, and components from the text.\n4. Conclude with a helpful follow-up drill question based on this document.`;
+    }
   } else if (documentTitle) {
-    docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT]: The student is specifically studying "${documentTitle}". Ground your explanations around this material.`;
+    if (groundingScope === "hybrid") {
+      docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT - HYBRID]: The student is studying "${documentTitle}". Ground your explanations around this material, but feel free to expand using general AI knowledge.`;
+    } else {
+      docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT - STRICT]: The student is specifically studying "${documentTitle}". Ground your explanations strictly around this material.`;
+    }
   }
 
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -611,8 +631,9 @@ export async function generateTutorReply(params: {
   documentTitle?: string;
   documentText?: string;
   selectedModel?: string;
+  groundingScope?: GroundingScope;
 }): Promise<TutorResponse> {
-  const { query, mode, history, docId, documentTitle, documentText, selectedModel } = params;
+  const { query, mode, history, docId, documentTitle, documentText, selectedModel, groundingScope = "doc-only" } = params;
   const apiBase = getApiBase();
 
   const isGroq = selectedModel === "groq-120b" || selectedModel === "groq-qwen";
@@ -622,7 +643,7 @@ export async function generateTutorReply(params: {
   // 1. If Groq selected by user, try Groq first
   if (isGroq) {
     try {
-      const groqAnswer = await callGroqDirectly(query, mode, history, groqModel, documentTitle, documentText);
+      const groqAnswer = await callGroqDirectly(query, mode, history, groqModel, documentTitle, documentText, groundingScope);
       return {
         answer: groqAnswer,
         provider: groqLabel,
@@ -637,7 +658,7 @@ export async function generateTutorReply(params: {
 
   // 2. Direct Cloud Gemini API
   try {
-    const cloudAnswer = await callGeminiDirectly(query, mode, history, documentTitle, documentText);
+    const cloudAnswer = await callGeminiDirectly(query, mode, history, documentTitle, documentText, groundingScope);
     return {
       answer: cloudAnswer,
       provider: "Google Gemini Cloud AI",
@@ -652,7 +673,7 @@ export async function generateTutorReply(params: {
   // 3. Automatic Failover: If Gemini failed, try Groq before falling back to offline
   if (!isGroq) {
     try {
-      const fallbackGroq = await callGroqDirectly(query, mode, history, "openai/gpt-oss-120b", documentTitle, documentText);
+      const fallbackGroq = await callGroqDirectly(query, mode, history, "openai/gpt-oss-120b", documentTitle, documentText, groundingScope);
       return {
         answer: fallbackGroq,
         provider: "Groq Cloud (Failover Recovery)",

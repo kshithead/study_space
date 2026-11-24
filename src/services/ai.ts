@@ -60,27 +60,27 @@ function getModeSystemPrompt(mode: TutorMode): string {
   switch (normalized) {
     case "socratic":
       return (
-        "You are Socrates, a brilliant Socratic AI tutor. " +
-        "Never just dump raw answers. Guide the student step-by-step using thought-provoking questions, intuitive hints, and real-world analogies. " +
-        "Help them discover the solution themselves, and ask a short follow-up question to verify their intuition."
+        "You are Socrates, an expert AI academic mentor and project tutor. " +
+        "When the user asks questions, ALWAYS provide a direct, comprehensive, and factually thorough answer first. If an authentic study document is provided, you MUST ground your answer directly and specifically in its contents, citing exact technologies, architecture, sections, and concepts from the text. Never give vague philosophical fluff or withhold the answer. " +
+        "After providing the full factual answer, conclude with a sharp, insightful Socratic follow-up question or concept drill to test the student's retention."
       );
     case "exam":
       return (
         "You are a rigorous university professor running an exam prep checkpoint. " +
-        "Frame your explanation like a university exam review: highlight common exam pitfalls, traps, and grading rubrics. " +
+        "Frame your explanation like a university exam review: cite exact definitions from the document, highlight common exam pitfalls, traps, and grading rubrics. " +
         "Include a mini practice question or checkpoint for them to solve."
       );
     case "eli5":
       return (
         "You are an engaging tutor explaining concepts in 'Explain Like I'm 5' style. " +
-        "Use simple everyday language, vivid real-world analogies, and relatable stories. " +
+        "Use simple everyday language, vivid real-world analogies, and relatable stories based on the document's subject matter. " +
         "Avoid heavy mathematical jargon unless you explain it through a visual metaphor first."
       );
     case "deepdive":
       return (
         "You are a principal engineer and computer science researcher. " +
         "Provide a comprehensive, rigorous deep dive: architectural breakdown, mathematical/algorithmic formulation, time/space complexity, " +
-        "trade-offs, edge cases, and clean, runnable code examples with comments."
+        "trade-offs, edge cases, and clean, runnable code examples with comments based on the document."
       );
     default:
       return (
@@ -108,8 +108,8 @@ async function callGeminiDirectly(
   const systemInstruction = getModeSystemPrompt(mode);
   let docGrounding = "";
   if (documentText && documentText.trim()) {
-    const cleanDocText = documentText.slice(0, 30000);
-    docGrounding = `\n\n=======================================================\nAUTHENTIC STUDY DOCUMENT CONTENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nCRITICAL INSTRUCTION: The student has uploaded and is asking questions specifically about the document above. You MUST ground your answer directly and accurately in the technical details, architecture, definitions, workflows, and facts from this document! Quote or reference specific sections and technologies mentioned in the text. Do NOT give vague or generic boilerplate answers.`;
+    const cleanDocText = documentText.slice(0, 50000);
+    docGrounding = `\n\n=======================================================\nAUTHENTIC STUDY DOCUMENT CONTENT: "${documentTitle || "Uploaded Study Material"}"\n=======================================================\n${cleanDocText}\n=======================================================\n\nCRITICAL INSTRUCTIONS:\n1. The student is asking questions specifically about the document above. You MUST ground your answer directly, thoroughly, and factually in the technical details, architecture, definitions, workflows, and facts from this document!\n2. When asked for technologies, features, architecture, or explanations, list them directly and comprehensively quoting exact tools, libraries, frameworks, and sections from the document!\n3. Never give vague or generic boilerplate answers.\n4. Conclude with a helpful follow-up question or concept drill.`;
   } else if (documentTitle) {
     docGrounding = `\n\n[DOCUMENT GROUNDING CONTEXT]: The student is specifically studying and asking questions about their uploaded study material: "${documentTitle}". Ground your explanations, key definitions, summaries, and analogies around this document's subject matter.`;
   }

@@ -9,6 +9,7 @@ import type { ChatSession, TutorMode } from "@/data/mockData";
 import { useAppState } from "@/store/appState";
 import { generateTutorReply } from "@/services/ai";
 import { extractPdfText, getCachedPdfText } from "@/lib/pdfTextExtractor";
+import { isSupabaseConfigured, listPdfsFromSupabase } from "@/lib/supabase";
 import {
   Select,
   SelectContent,
@@ -152,12 +153,17 @@ export default function AiTutor() {
       const existing = chatSessions.find((s) => s.title === targetSessionTitle);
       if (existing) {
         setActiveId(existing.id);
+        if (locationState.documentUrl && !existing.documentUrl) {
+          upsertChatSession({ ...existing, documentUrl: locationState.documentUrl });
+        }
       } else {
         const now = Date.now();
         const sessionId = `doc-chat-${now}`;
         const newSession: ChatSession = {
           id: sessionId,
           title: targetSessionTitle,
+          documentTitle: docTitle,
+          documentUrl: locationState.documentUrl,
           updatedAt: now,
           messages: [
             {
@@ -173,58 +179,94 @@ export default function AiTutor() {
         setActiveId(sessionId);
       }
     }
-  }, [locationState?.documentTitle]);
-
-  // Extract PDF text for grounding whenever documentUrl or active document changes
-  useEffect(() => {
-    const docUrl = locationState?.documentUrl;
-    const docTitle = locationState?.documentTitle;
-
-    // Check cache first
-    const cached =
-      (docTitle ? getCachedPdfText(docTitle) : "") ||
-      (docUrl ? getCachedPdfText(docUrl) : "");
-
-    if (cached) {
-      setExtractedDocText(cached);
-      return;
-    }
-
-    if (docUrl) {
-      setIsExtracting(true);
-      extractPdfText(docUrl)
-        .then((text) => {
-          if (text) {
-            setExtractedDocText(text);
-            if (docTitle) {
-              try {
-                sessionStorage.setItem(`ss.pdfText.${encodeURIComponent(docTitle)}`, text.slice(0, 40000));
-              } catch {}
-            }
-            toast.success(`Indexed "${docTitle || "Document"}" for AI Tutoring!`, {
-              description: `${text.length.toLocaleString()} characters extracted and grounded.`,
-            });
-          }
-        })
-        .catch((err) => console.warn("Failed to extract PDF text:", err))
-        .finally(() => setIsExtracting(false));
-    }
-  }, [locationState?.documentUrl, locationState?.documentTitle]);
+  }, [locationState?.documentTitle, locationState?.documentUrl]);
 
   const active = chatSessions.find((s) => s.id === activeId) ?? null;
 
-  // Sync extracted text when switching to an existing Study session
+  // Sync and extract text for active grounded document session
   useEffect(() => {
-    if (active?.title.startsWith("Study: ")) {
-      const docTitle = active.title.replace("Study: ", "");
-      if (!extractedDocText) {
-        const cached = getCachedPdfText(docTitle) || (locationState?.documentUrl ? getCachedPdfText(locationState.documentUrl) : "");
-        if (cached) {
-          setExtractedDocText(cached);
+    if (!active?.title.startsWith("Study: ")) {
+      setExtractedDocText("");
+      return;
+    }
+
+    const docTitle = active.title.replace("Study: ", "").trim();
+
+    // 1. If active session already has stored text, use it immediately
+    if (active.docText && active.docText.trim().length > 50) {
+      setExtractedDocText(active.docText);
+      return;
+    }
+
+    // 2. Check in-memory or sessionStorage cache
+    const cached =
+      getCachedPdfText(docTitle) ||
+      (active.documentUrl ? getCachedPdfText(active.documentUrl) : "") ||
+      (locationState?.documentUrl ? getCachedPdfText(locationState.documentUrl) : "");
+
+    if (cached) {
+      setExtractedDocText(cached);
+      if (!active.docText) {
+        upsertChatSession({ ...active, docText: cached });
+      }
+      return;
+    }
+
+    // 3. Resolve document URL (from active session, locationState, or query Supabase)
+    const resolveAndExtract = async () => {
+      let targetUrl = active.documentUrl || locationState?.documentUrl;
+
+      if (!targetUrl && isSupabaseConfigured) {
+        try {
+          const files = await listPdfsFromSupabase(user?.email);
+          const cleanSearch = docTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const match = files.find((f) => {
+            const fTitle = f.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+            const fName = f.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+            return (
+              fTitle.includes(cleanSearch) ||
+              cleanSearch.includes(fTitle) ||
+              fName.includes(cleanSearch) ||
+              cleanSearch.includes(fName)
+            );
+          });
+          if (match?.url) {
+            targetUrl = match.url;
+          }
+        } catch (e) {
+          console.warn("Error finding document in Supabase:", e);
         }
       }
-    }
-  }, [active?.title, extractedDocText, locationState?.documentUrl]);
+
+      if (targetUrl) {
+        setIsExtracting(true);
+        try {
+          const text = await extractPdfText(targetUrl);
+          if (text) {
+            setExtractedDocText(text);
+            try {
+              sessionStorage.setItem(`ss.pdfText.${encodeURIComponent(docTitle)}`, text.slice(0, 60000));
+            } catch {}
+            upsertChatSession({
+              ...active,
+              documentTitle: docTitle,
+              documentUrl: targetUrl,
+              docText: text,
+            });
+            toast.success(`Indexed "${docTitle}" for AI Tutoring!`, {
+              description: `${text.length.toLocaleString()} characters ready for deep grounding.`,
+            });
+          }
+        } catch (err) {
+          console.warn("Failed to extract PDF text:", err);
+        } finally {
+          setIsExtracting(false);
+        }
+      }
+    };
+
+    void resolveAndExtract();
+  }, [active?.id, active?.title, active?.docText, active?.documentUrl, locationState?.documentUrl, user?.email]);
   const sortedSessions = useMemo(
     () => [...chatSessions].sort((a, b) => b.updatedAt - a.updatedAt),
     [chatSessions],
@@ -266,9 +308,9 @@ export default function AiTutor() {
     setStreamText("Thinking with Gemini AI...");
 
     const isDocSession = base.title.startsWith("Study: ");
-    const docTitle = isDocSession ? base.title.replace("Study: ", "") : undefined;
+    const docTitle = isDocSession ? base.title.replace("Study: ", "").trim() : undefined;
     const docText = isDocSession
-      ? (extractedDocText || (docTitle ? getCachedPdfText(docTitle) : "") || (locationState?.documentUrl ? getCachedPdfText(locationState.documentUrl) : ""))
+      ? (extractedDocText || base.docText || (docTitle ? getCachedPdfText(docTitle) : "") || (locationState?.documentUrl ? getCachedPdfText(locationState.documentUrl) : ""))
       : undefined;
 
     try {
@@ -473,15 +515,15 @@ export default function AiTutor() {
                 Grounded Document: <strong className="text-white">{active.title.replace("Study: ", "")}</strong>
               </span>
               {isExtracting ? (
-                <span className="text-[11px] text-amber-300 animate-pulse">(Reading PDF text...)</span>
-              ) : extractedDocText ? (
-                <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300 font-mono">
-                  {Math.round(extractedDocText.length / 1000)}k chars indexed
+                <span className="text-[11px] text-amber-300 animate-pulse font-normal">(Reading entire PDF text...)</span>
+              ) : (extractedDocText || active.docText) ? (
+                <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300 font-mono font-semibold">
+                  {Math.round(((extractedDocText || active.docText || "").length) / 1000)}k chars indexed
                 </span>
               ) : null}
             </span>
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-              {extractedDocText ? "Deep Text Grounding Active" : "RAG Grounding Active"}
+              {(extractedDocText || active.docText) ? "Deep Text Grounding Active" : "RAG Grounding Active"}
             </span>
           </div>
         )}

@@ -626,6 +626,9 @@ export interface ChatSession {
   title: string;
   updatedAt: number;
   messages: ChatMessage[];
+  documentUrl?: string;
+  documentTitle?: string;
+  docText?: string;
 }
 
 const now = Date.now();

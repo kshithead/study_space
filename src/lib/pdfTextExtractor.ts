@@ -1,8 +1,9 @@
 import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
-// Configure worker for Vite and browser environments
+// Configure worker for Vite: bundled locally so no cross-origin / CORS security errors occur
 if (typeof window !== "undefined") {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 }
 
 // In-memory / session cache for extracted document text
@@ -13,7 +14,7 @@ const textCache = new Map<string, string>();
  */
 export async function extractPdfText(
   source: string | File | ArrayBuffer,
-  maxPages = 20
+  maxPages = 40
 ): Promise<string> {
   const cacheKey = typeof source === "string" ? source : (source as File).name || "buffer";
   if (textCache.has(cacheKey)) {
@@ -34,7 +35,7 @@ export async function extractPdfText(
 
     if (typeof source === "string") {
       const res = await fetch(source);
-      if (!res.ok) throw new Error(`HTTP ${res.status} fetching PDF`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} fetching PDF from ${source}`);
       data = await res.arrayBuffer();
     } else if (source instanceof File) {
       data = await source.arrayBuffer();
@@ -70,7 +71,7 @@ export async function extractPdfText(
       try {
         sessionStorage.setItem(
           `ss.pdfText.${encodeURIComponent(cacheKey)}`,
-          fullText.slice(0, 40000)
+          fullText.slice(0, 60000)
         );
       } catch {}
       return fullText;
